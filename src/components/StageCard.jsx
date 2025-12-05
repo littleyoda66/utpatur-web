@@ -1,49 +1,45 @@
 // src/components/StageCard.jsx
 import React from 'react';
+import './StageCard.css';
 import { formatNumber } from '../utils/formatNumber';
 
 export function StageCard({
-  label,          // ex: "Jour 1" / "Day 1" / "Étape suivante"
-  fromName,       // nom de la cabane de départ
-  toName,         // nom de la cabane d’arrivée
-  distanceKm,     // nombre
-  dPlus,          // nombre (m)
-  dMinus,         // nombre (m)
-  isActive = false,    // étape actuellement sélectionnée
-  isCandidate = false, // proposition de prochaine étape
-  onClick,             // clic sur la carte (surbrillance sur la map, etc.)
-  onRemove,            // pour supprimer l’étape (optionnel)
-  primaryActionLabel,  // ex: "Ajouter comme étape" pour les suggestions
-  onPrimaryAction,     // callback pour le bouton principal (optionnel)
+  label,
+  fromName,
+  via,
+  toName,
+  distanceKm,
+  dplusM,
+  dminusM,
+  isCandidate = false,
+  isActive = false,
+  isRest = false,
+  onAdd,
+  onRemove,
 }) {
-  const handleRemove = (event) => {
-    event.stopPropagation();
-    if (onRemove) onRemove();
-  };
+  const classNames = [
+    'stage-card',
+    isActive ? 'stage-card--active' : '',
+    isCandidate ? 'stage-card--candidate' : '',
+    isRest ? 'stage-card--rest' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
-  const handlePrimaryAction = (event) => {
-    event.stopPropagation();
-    if (onPrimaryAction) onPrimaryAction();
-  };
+  const hasDistance = distanceKm !== null && distanceKm !== undefined;
+  const hasDplus = dplusM !== null && dplusM !== undefined;
+  const hasDminus = dminusM !== null && dminusM !== undefined;
 
   return (
-    <div
-      className={[
-        'stage-card',
-        isActive ? 'stage-card--active' : '',
-        isCandidate ? 'stage-card--candidate' : '',
-      ].join(' ')}
-      onClick={onClick}
-    >
+    <div className={classNames}>
       <div className="stage-card__header">
-        {label && <span className="stage-card__label">{label}</span>}
-
+        <span className="stage-card__label">{label}</span>
         {onRemove && (
           <button
             type="button"
             className="stage-card__remove"
-            onClick={handleRemove}
-            aria-label="Remove stage"
+            onClick={onRemove}
+            title="Supprimer"
           >
             ×
           </button>
@@ -52,35 +48,75 @@ export function StageCard({
 
       <div className="stage-card__body">
         <div className="stage-card__route">
-          <span className="stage-card__hut stage-card__hut--from">{fromName}</span>
-          <span className="stage-card__arrow">→</span>
-          <span className="stage-card__hut stage-card__hut--to">{toName}</span>
-        </div>
-
-        <div className="stage-card__metrics">
-          <span className="stage-card__metric">
-            {formatNumber(distanceKm, 1)} km
-          </span>
-          <span className="stage-card__metric">
-            +{formatNumber(dPlus, 0)} m
-          </span>
-          <span className="stage-card__metric">
-            -{formatNumber(dMinus, 0)} m
-          </span>
-        </div>
-      </div>
-
-      {primaryActionLabel && onPrimaryAction && (
-        <div className="stage-card__footer">
-          <button
-            type="button"
-            className="stage-card__primary-action"
-            onClick={handlePrimaryAction}
-          >
-            {primaryActionLabel}
-          </button>
+  {isCandidate ? (
+    <>
+      {via && (
+        <div className="stage-card__via">
+          via {via}
         </div>
       )}
+      <div className="stage-card__route-main">
+        <span className="stage-card__arrow">→</span>
+        <span
+          className={
+            isRest
+              ? 'stage-card__hut stage-card__hut--rest'
+              : 'stage-card__hut'
+          }
+        >
+          {toName}
+        </span>
+      </div>
+    </>
+  ) : (
+    <>
+      {fromName && (
+        <span className="stage-card__hut">{fromName}</span>
+      )}
+      {fromName && <span className="stage-card__arrow">→</span>}
+      <span
+        className={
+          isRest
+            ? 'stage-card__hut stage-card__hut--rest'
+            : 'stage-card__hut'
+        }
+      >
+        {toName}
+      </span>
+    </>
+  )}
+</div>
+
+
+
+                <div className="stage-card__metrics-row">
+          <div className="stage-card__metrics">
+            <span className="stage-card__metric">
+              {hasDistance ? `${formatNumber(distanceKm, 1)} km` : '— km'}
+            </span>
+            <span className="stage-card__metric">
+              {hasDplus ? `+${formatNumber(dplusM, 0)} m` : '+— m'}
+            </span>
+            <span className="stage-card__metric">
+              {hasDminus ? `-${formatNumber(dminusM, 0)} m` : '-— m'}
+            </span>
+          </div>
+
+          {isCandidate && onAdd && (
+            <button
+              type="button"
+              className="stage-card__link-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdd();
+              }}
+            >
+              + Ajouter
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
+

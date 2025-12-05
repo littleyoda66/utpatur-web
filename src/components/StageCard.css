@@ -1,7 +1,7 @@
 .stage-card {
   border-radius: 0.75rem;
   border: 1px solid #e0e0e0;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 1rem;
   margin-bottom: 0.75rem;
   background: #ffffff;
   cursor: pointer;
@@ -10,7 +10,8 @@
 
 .stage-card--active {
   border-color: #2563eb;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: #eff6ff; /* léger bleu très clair */
 }
 
 .stage-card--candidate {
@@ -56,8 +57,21 @@
   font-size: 0.9rem;
   font-weight: 500;
   display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stage-card__route-main {
+  display: flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.stage-card__via {
+  font-size: 0.75rem;     /* plus petit */
+  font-weight: 400;
+  font-style: italic;     /* italique */
+  color: #6b7280;         /* gris */
 }
 
 .stage-card__hut {
@@ -70,12 +84,18 @@
   opacity: 0.7;
 }
 
+.stage-card__metrics-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.25rem;
+}
+
 .stage-card__metrics {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.5rem;
   font-size: 0.8rem;
-  color: #4b5563;
+  /* align-items: center; */
 }
 
 .stage-card__metric {
@@ -84,9 +104,7 @@
   background: #f3f4f6;
 }
 
-.stage-card__footer {
-  margin-top: 0.5rem;
-}
+
 
 .stage-card__primary-action {
   width: 100%;
@@ -99,3 +117,33 @@
   background: #2563eb;
   color: #ffffff;
 }
+
+.stage-card--rest {
+  background: #f9fafb;        /* fond très léger */
+}
+
+.stage-card__hut--rest {
+  font-style: italic;
+}
+
+.stage-card__footer {
+  margin-top: 0.35rem;
+  text-align: right;
+}
+
+.stage-card__link-action {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #2563eb;      /* bleu discret */
+  cursor: pointer;
+  line-height: 1.2;   
+}
+
+.stage-card__link-action:hover {
+  color: #1d4ed8;      /* un peu plus marqué au hover */
+}
+
+

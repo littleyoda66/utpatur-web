@@ -1,0 +1,43 @@
+.schematic-map {
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 0.75rem;
+}
+
+.schematic-map__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.schematic-map--empty {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.schematic-map__day-label {
+  font-size: 0.75rem;
+  fill: #6b7280;
+}
+
+.schematic-map__cabane-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  fill: #111827;
+}
+
+.schematic-map__metrics-label {
+  font-size: 0.75rem;
+  fill: #6b7280;
+}
+
+.schematic-map__delete {
+  font-size: 0.9rem;
+  fill: #9ca3af;
+  cursor: pointer;
+}
+
+.schematic-map__delete:hover {
+  fill: #ef4444;
+}
