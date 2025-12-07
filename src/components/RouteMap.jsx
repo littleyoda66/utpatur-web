@@ -216,18 +216,112 @@ function buildMarkersData(days, reachableHuts) {
 }
 
 // -----------------------------------------------------------------------------
-// Polyline de l’itinéraire (avec éventuels via)
-// -> robuste : on ne regarde que la présence d'un viaHut/via_hut
+// Décodage d'une polyline encodée ORS avec elevation (lat, lon, z)
+// On ignore la 3e dimension (altitude) et on renvoie [lat, lon] pour Leaflet.
+// -----------------------------------------------------------------------------
+function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== 'string') {
+    return [];
+  }
+
+  let index = 0;
+  const len = encoded.length;
+  let lat = 0;
+  let lng = 0;
+  const coordinates = [];
+  const PRECISION = 1e5;
+
+  while (index < len) {
+    let result = 0;
+    let shift = 0;
+    let b;
+
+    // --- latitude ---
+    do {
+      if (index >= len) break;
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lat += deltaLat;
+
+    // --- longitude ---
+    result = 0;
+    shift = 0;
+    do {
+      if (index >= len) break;
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lng += deltaLng;
+
+    // --- altitude (3e dimension), présente car on a "elevation: true" côté ORS ---
+    result = 0;
+    shift = 0;
+    if (index < len) {
+      do {
+        if (index >= len) break;
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      // const deltaZ = (result & 1) ? ~(result >> 1) : (result >> 1);
+      // on pourrait cumuler z ici, mais on n'en a pas besoin pour le tracé
+    }
+
+    // ORS → lat / lon avec précision 1e5
+    coordinates.push([lat / PRECISION, lng / PRECISION]);
+  }
+
+  return coordinates;
+}
+
+
+
+// -----------------------------------------------------------------------------
+// Construction de la géométrie de l'itinéraire
+// - retourne une liste de segments avec un flag isApprox
+//   + une liste aplatie de tous les points pour le fitBounds
 // -----------------------------------------------------------------------------
 function buildPolylinePositions(days) {
-  const pts = [];
-  if (!days || days.length === 0) return pts;
+  const segments = [];
+  const allPositions = [];
 
-  for (let i = 0; i < days.length; i += 1) {
-    const day = days[i];
+  if (!days || days.length === 0) {
+    return { segments, allPositions };
+  }
+
+  const safeDays = Array.isArray(days) ? days : [];
+
+  const pushSegment = (positions, isApprox) => {
+    if (!positions || positions.length < 2) return;
+
+    const [firstLat, firstLng] = positions[0];
+    const [lastLat, lastLng] = positions[positions.length - 1];
+
+    // On ignore les segments de longueur nulle
+    if (firstLat === lastLat && firstLng === lastLng) {
+      return;
+    }
+
+    const seg = {
+      positions,
+      isApprox: !!isApprox,
+    };
+    segments.push(seg);
+    positions.forEach((p) => {
+      allPositions.push(p);
+    });
+  };
+
+  for (let i = 0; i < safeDays.length; i += 1) {
+    const day = safeDays[i];
     if (!day || !day.hut) continue;
-    const hut = day.hut;
 
+    const hut = day.hut;
     if (
       typeof hut.latitude !== 'number' ||
       typeof hut.longitude !== 'number'
@@ -236,30 +330,129 @@ function buildPolylinePositions(days) {
     }
 
     if (i === 0) {
-      // premier jour : cabane de départ uniquement
-      pts.push([hut.latitude, hut.longitude]);
+      // Jour 0 : cabane de départ, aucun segment à tracer
       continue;
     }
 
-    const seg = day.segmentFromPrevious;
+    const prevDay = safeDays[i - 1];
+    if (!prevDay || !prevDay.hut) {
+      continue;
+    }
 
-    // si on a un via avec coordonnées : on l’insère entre les deux huts
-    if (seg) {
-      const viaHut = seg.viaHut || seg.via_hut || null;
+    const prevHut = prevDay.hut;
+    if (
+      typeof prevHut.latitude !== 'number' ||
+      typeof prevHut.longitude !== 'number'
+    ) {
+      continue;
+    }
+
+    const startLatLng = [prevHut.latitude, prevHut.longitude];
+    const endLatLng = [hut.latitude, hut.longitude];
+
+    const seg =
+      day.segmentFromPrevious || day.segment_from_previous || null;
+    const viaHut =
+      seg && (seg.viaHut || seg.via_hut)
+        ? seg.viaHut || seg.via_hut
+        : null;
+    const steps = seg && Array.isArray(seg.steps) ? seg.steps : [];
+
+    // Aucun segmentFromPrevious : on trace un segment simple (approx)
+    if (!seg) {
+      pushSegment([startLatLng, endLatLng], true);
+      continue;
+    }
+
+    // Pas de steps ORS : fallback "points droits" (via éventuel) => tout en pointillé
+    if (!steps || steps.length === 0) {
+      const positions = [startLatLng];
+
       if (
         viaHut &&
         typeof viaHut.latitude === 'number' &&
         typeof viaHut.longitude === 'number'
       ) {
-        pts.push([viaHut.latitude, viaHut.longitude]);
+        positions.push([viaHut.latitude, viaHut.longitude]);
+      }
+
+      positions.push(endLatLng);
+      pushSegment(positions, true);
+      continue;
+    }
+
+    // Steps présents : mélange géométrie ORS + segments droits approximatifs
+    let currentPoint = startLatLng;
+
+    const decodedSteps = steps.map((step) => {
+      const encoded =
+        step && typeof step.geometry_polyline === 'string'
+          ? step.geometry_polyline
+          : null;
+      const coords = encoded ? decodePolyline(encoded) : [];
+      return {
+        hasGeometry: !!encoded && coords.length > 1,
+        coords,
+      };
+    });
+
+    for (
+      let stepIndex = 0;
+      stepIndex < decodedSteps.length;
+      stepIndex += 1
+    ) {
+      const stepGeom = decodedSteps[stepIndex];
+
+      if (stepGeom.hasGeometry) {
+        const coords = stepGeom.coords;
+
+        // Petit segment approx entre le point courant et le début de la géométrie
+        if (currentPoint) {
+          const first = coords[0];
+          const approxPositions = [currentPoint, first];
+          pushSegment(approxPositions, true);
+        }
+
+        // Segment ORS en trait plein
+        pushSegment(coords, false);
+
+        currentPoint = coords[coords.length - 1];
+      } else {
+        // Pas de géométrie : segment droit approximatif vers le prochain "anchor"
+        let nextAnchor = null;
+
+        for (
+          let j = stepIndex + 1;
+          j < decodedSteps.length;
+          j += 1
+        ) {
+          const nextGeom = decodedSteps[j];
+          if (nextGeom.hasGeometry && nextGeom.coords.length > 0) {
+            nextAnchor = nextGeom.coords[0];
+            break;
+          }
+        }
+
+        if (!nextAnchor) {
+          nextAnchor = endLatLng;
+        }
+
+        if (currentPoint && nextAnchor) {
+          const approxPositions = [currentPoint, nextAnchor];
+          pushSegment(approxPositions, true);
+          currentPoint = nextAnchor;
+        }
       }
     }
 
-    // puis la cabane d’arrivée du jour
-    pts.push([hut.latitude, hut.longitude]);
+    // On s'assure de "rejoindre" la cabane d'arrivée
+    if (currentPoint) {
+      const approxToEnd = [currentPoint, endLatLng];
+      pushSegment(approxToEnd, true);
+    }
   }
 
-  return pts;
+  return { segments, allPositions };
 }
 
 // -----------------------------------------------------------------------------
@@ -350,10 +543,14 @@ export function RouteMap({
   const safeDays = days || [];
   const safeReachable = reachableHuts || [];
 
-  const polylinePositions = useMemo(
-    () => buildPolylinePositions(safeDays),
-    [safeDays],
-  );
+  const {
+  segments: routeSegments,
+  allPositions: polylinePositions,
+} = useMemo(
+  () => buildPolylinePositions(safeDays),
+  [safeDays],
+);
+
 
   const { markers, hasRoute } = useMemo(
     () => buildMarkersData(safeDays, safeReachable),
@@ -505,12 +702,24 @@ export function RouteMap({
         <FitBoundsOnRoute positions={allPositions} />
 
         {/* Tracé de l’itinéraire */}
-        {polylinePositions.length >= 2 && (
-          <Polyline
-            positions={polylinePositions}
-            pathOptions={{ color: '#1E3A8A', weight: 3 }}
-          />
-        )}
+        {routeSegments.map((seg, idx) => (
+		  <Polyline
+			key={`route-seg-${idx}`}
+			positions={seg.positions}
+			pathOptions={
+			  seg.isApprox
+				? {
+					color: '#1E3A8A',
+					weight: 3,
+					dashArray: '6 6', // segments approximatifs => pointillés
+				  }
+				: {
+					color: '#1E3A8A',
+					weight: 3, // segments ORS => trait plein
+				  }
+			}
+		  />
+		))}
 
         {/* Markers pour les via */}
         {safeDays.map((day) => {

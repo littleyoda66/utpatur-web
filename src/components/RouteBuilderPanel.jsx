@@ -240,14 +240,16 @@ export function RouteBuilderPanel() {
       allHuts.find((h) => h.name === candidate.via) || null;
   }
 
-  const segment = {
+    const segment = {
     distanceKm: candidate.distance_km ?? candidate.total_distance_km ?? 0,
     dplusM: candidate.dplus_m ?? candidate.total_dplus_m ?? 0,
     dminusM: candidate.dminus_m ?? candidate.total_dminus_m ?? 0,
     segments: candidate.segments ?? null,
     via: candidate.via ?? null,
+    steps: candidate.steps || [], // 👈 nouvelle propriété : détail des segments ORS
     viaHut, // 👈 cabane intermédiaire avec latitude / longitude
   };
+
 
   const newDay = createDay({
     dayIndex: lastDay.dayIndex + 1,
