@@ -296,6 +296,20 @@ function buildPolylinePositions(days) {
 
   const safeDays = Array.isArray(days) ? days : [];
 
+  // On ajoute toujours la cabane de départ dans allPositions,
+  // pour que la carte ait au moins un point dès la première cabane.
+  if (safeDays.length > 0) {
+    const firstDay = safeDays[0];
+    const firstHut = firstDay && firstDay.hut;
+    if (
+      firstHut &&
+      typeof firstHut.latitude === 'number' &&
+      typeof firstHut.longitude === 'number'
+    ) {
+      allPositions.push([firstHut.latitude, firstHut.longitude]);
+    }
+  }
+
   const pushSegment = (positions, isApprox) => {
     if (!positions || positions.length < 2) return;
 
