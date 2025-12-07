@@ -14,7 +14,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './RouteMap.css';
 
-const { BaseLayer } = LayersControl;
+const { BaseLayer, Overlay } = LayersControl;
 
 // -----------------------------------------------------------------------------
 // FitBounds sur l'ensemble des positions (itinéraire + candidates)
@@ -116,7 +116,7 @@ function buildMarkersData(days, reachableHuts) {
 
   // Tous les dayIndex utilisés dans l’itinéraire
   const allDayIndices = [];
-  days.forEach((day, index) => {
+  (days || []).forEach((day, index) => {
     if (!day || !day.hut) return;
     const dayIndex =
       typeof day.dayIndex === 'number' ? day.dayIndex : index;
@@ -128,7 +128,7 @@ function buildMarkersData(days, reachableHuts) {
   const lastDayIndex = hasRoute ? Math.max(...allDayIndices) : null;
 
   // 1) Cabanes de l’itinéraire
-  days.forEach((day, index) => {
+  (days || []).forEach((day, index) => {
     const hut = day?.hut;
     if (!hut) return;
 
@@ -217,6 +217,7 @@ function buildMarkersData(days, reachableHuts) {
 
 // -----------------------------------------------------------------------------
 // Polyline de l’itinéraire (avec éventuels via)
+// -> robuste : on ne regarde que la présence d'un viaHut/via_hut
 // -----------------------------------------------------------------------------
 function buildPolylinePositions(days) {
   const pts = [];
@@ -235,15 +236,15 @@ function buildPolylinePositions(days) {
     }
 
     if (i === 0) {
-      // premier jour
+      // premier jour : cabane de départ uniquement
       pts.push([hut.latitude, hut.longitude]);
       continue;
     }
 
     const seg = day.segmentFromPrevious;
 
-    // via intermédiaire
-    if (seg && seg.segments === 2) {
+    // si on a un via avec coordonnées : on l’insère entre les deux huts
+    if (seg) {
       const viaHut = seg.viaHut || seg.via_hut || null;
       if (
         viaHut &&
@@ -254,7 +255,7 @@ function buildPolylinePositions(days) {
       }
     }
 
-    // cabane d’arrivée du jour
+    // puis la cabane d’arrivée du jour
     pts.push([hut.latitude, hut.longitude]);
   }
 
@@ -262,46 +263,55 @@ function buildPolylinePositions(days) {
 }
 
 // -----------------------------------------------------------------------------
-// Style du cercle (CircleMarker) selon le rôle
+// Style du cercle (CircleMarker) selon le rôle + hover
 // -----------------------------------------------------------------------------
-function getCircleStyle(marker) {
+function getCircleStyle(marker, isHovered = false) {
   const baseRadius = 6;
   const routeColor = '#1e3a8a';
   const orange = '#f59e0b';
 
+  let radius = baseRadius;
+  let pathOptions;
+
   switch (marker.role) {
     case 'route':
-      return {
-        radius: baseRadius,
-        pathOptions: {
-          color: '#e5e7eb', // bord clair
-          weight: 2,
-          fillColor: routeColor,
-          fillOpacity: 1,
-        },
+      pathOptions = {
+        color: '#e5e7eb', // bord clair
+        weight: 2,
+        fillColor: routeColor,
+        fillOpacity: 1,
       };
+      break;
     case 'candidate':
-      return {
-        radius: baseRadius + 1,
-        pathOptions: {
-          color: orange,
-          weight: 3,          // anneau bien visible
-          fillColor: '#ffffff',
-          fillOpacity: 0.9,   // effet “anneau” sur fond clair
-        },
+      radius = baseRadius + 1;
+      pathOptions = {
+        color: orange,
+        weight: 3, // anneau bien visible
+        fillColor: '#ffffff',
+        fillOpacity: 0.9, // effet “anneau” sur fond clair
       };
+      break;
     case 'both':
     default:
-      return {
-        radius: baseRadius + 1,
-        pathOptions: {
-          color: orange,
-          weight: 3,
-          fillColor: routeColor,
-          fillOpacity: 1,
-        },
+      radius = baseRadius + 1;
+      pathOptions = {
+        color: orange,
+        weight: 3,
+        fillColor: routeColor,
+        fillOpacity: 1,
       };
+      break;
   }
+
+  if (isHovered) {
+    radius += 2;
+    pathOptions = {
+      ...pathOptions,
+      weight: (pathOptions.weight || 2) + 1,
+    };
+  }
+
+  return { radius, pathOptions };
 }
 
 // -----------------------------------------------------------------------------
@@ -334,6 +344,7 @@ export function RouteMap({
   days,
   reachableHuts,
   onSelectReachableHut,
+  hoveredReachableHutId,
   setHoveredReachableHutId,
 }) {
   const safeDays = days || [];
@@ -372,7 +383,7 @@ export function RouteMap({
     if (allPositions.length > 0) {
       return allPositions[0];
     }
-    // fallback grossier
+    // fallback grossier (Laponie)
     return [68.0, 19.0];
   }, [polylinePositions, allPositions]);
 
@@ -430,7 +441,7 @@ export function RouteMap({
       <MapContainer
         center={defaultCenter}
         zoom={8}
-        scrollWheelZoom={false}
+        scrollWheelZoom={true}
         style={{
           width: '100%',
           height: '720px',
@@ -438,20 +449,56 @@ export function RouteMap({
           overflow: 'hidden',
         }}
       >
+         {/* Fonds de carte */}
         <LayersControl position="topright">
+          {/* 1. Topo par défaut */}
           <BaseLayer checked name="Topo (OpenTopoMap)">
             <TileLayer
               attribution="Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap"
               url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+              maxZoom={17}
             />
           </BaseLayer>
 
+          {/* 2. Fond clair très neutre */}
+          <BaseLayer name="Clair (CARTO Positron)">
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              maxZoom={19}
+            />
+          </BaseLayer>
+
+          {/* 3. OSM standard */}
           <BaseLayer name="OSM standard">
             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxZoom={19}
             />
           </BaseLayer>
+
+          {/* 4. Satellite */}
+          <BaseLayer name="Satellite (Esri World Imagery)">
+            <TileLayer
+              attribution="Tiles &copy; Esri — Source: Esri, Earthstar Geographics"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          </BaseLayer>
+		  
+		     {/* Overlay pistes ski (optionnel) */}
+          <Overlay checked name="Pistes de ski (OpenSnowMap)">
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors, tiles &copy; www.opensnowmap.org"
+              url="https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png"
+              maxZoom={18}
+              opacity={0.8}
+            />
+          </Overlay>
+        
+
+          
         </LayersControl>
 
         {/* Ajustement automatique du zoom */}
@@ -468,7 +515,7 @@ export function RouteMap({
         {/* Markers pour les via */}
         {safeDays.map((day) => {
           const seg = day.segmentFromPrevious;
-          if (!seg || seg.segments !== 2) return null;
+          if (!seg) return null;
 
           const viaHut = seg.viaHut || seg.via_hut || null;
           if (
@@ -512,48 +559,64 @@ export function RouteMap({
           }
 
           const position = [hut.latitude, hut.longitude];
-          const { radius, pathOptions } = getCircleStyle(marker);
+
+          const isHoveredOnMap =
+            hoveredReachableHutId != null &&
+            String(marker.hutId) === String(hoveredReachableHutId);
+
+          const { radius, pathOptions } = getCircleStyle(
+            marker,
+            isHoveredOnMap,
+          );
+
           const badgeIcon = createBadgeIcon(marker);
           const isClickableCandidate = marker.isCandidate;
 
           return (
-			  <React.Fragment key={marker.hutId}>
-				<CircleMarker
-				  center={position}
-				  radius={radius}
-				  pathOptions={pathOptions}
-				  eventHandlers={{
-					click: () => {
-					  if (isClickableCandidate && onSelectReachableHut) {
-						onSelectReachableHut(marker.reachableRaw || marker.hut);
-					  }
-					},
-					mouseover: () => {
-					  if (setHoveredReachableHutId && marker.isCandidate) {
-						setHoveredReachableHutId(marker.hutId);
-					  }
-					},
-					mouseout: () => {
-					  if (setHoveredReachableHutId && marker.isCandidate) {
-						setHoveredReachableHutId(null);
-					  }
-					},
-				  }}
-				>
-				  <Tooltip direction="top" offset={[0, -4]}>
-					{hut.name}
-				  </Tooltip>
-				</CircleMarker>
+            <React.Fragment key={marker.hutId}>
+              <CircleMarker
+                center={position}
+                radius={radius}
+                pathOptions={pathOptions}
+                eventHandlers={{
+                  click: () => {
+                    if (isClickableCandidate && onSelectReachableHut) {
+                      onSelectReachableHut(
+                        marker.reachableRaw || marker.hut,
+                      );
+                    }
+                  },
+                  mouseover: () => {
+                    if (setHoveredReachableHutId && marker.isCandidate) {
+                      setHoveredReachableHutId(marker.hutId);
+                    }
+                  },
+                  mouseout: () => {
+                    if (setHoveredReachableHutId && marker.isCandidate) {
+                      setHoveredReachableHutId(null);
+                    }
+                  },
+                }}
+              >
+                <Tooltip
+                  key={isHoveredOnMap ? 'tooltip-perm' : 'tooltip-hover'}
+                  direction="top"
+                  offset={[0, -4]}
+                  permanent={isHoveredOnMap}
+                >
+                  {hut.name}
+                </Tooltip>
+              </CircleMarker>
 
-				{badgeIcon && (
-				  <Marker
-					position={position}
-					icon={badgeIcon}
-					interactive={false}
-				  />
-				)}
-			  </React.Fragment>
-			);
+              {badgeIcon && (
+                <Marker
+                  position={position}
+                  icon={badgeIcon}
+                  interactive={false}
+                />
+              )}
+            </React.Fragment>
+          );
         })}
       </MapContainer>
     </div>

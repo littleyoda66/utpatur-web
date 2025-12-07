@@ -233,18 +233,11 @@ export function RouteBuilderPanel() {
 
   let viaHut = null;
   if (
-    candidate.segments === 2 &&
-    candidate.via &&
-    Array.isArray(allHuts) &&
-    allHuts.length > 0
+    (candidate.segments === 2 || candidate.segments === '2') &&
+    candidate.via
   ) {
     viaHut =
-      allHuts.find(
-        (h) =>
-          h.name === candidate.via &&
-          typeof h.latitude === 'number' &&
-          typeof h.longitude === 'number',
-      ) || null;
+      allHuts.find((h) => h.name === candidate.via) || null;
   }
 
   const segment = {
@@ -253,7 +246,7 @@ export function RouteBuilderPanel() {
     dminusM: candidate.dminus_m ?? candidate.total_dminus_m ?? 0,
     segments: candidate.segments ?? null,
     via: candidate.via ?? null,
-    viaHut, // ← nouveau : cabane intermédiaire complète
+    viaHut, // 👈 cabane intermédiaire avec latitude / longitude
   };
 
   const newDay = createDay({
@@ -265,7 +258,6 @@ export function RouteBuilderPanel() {
 
   setDays((prev) => [...prev, newDay]);
 };
-
 
   const handleTruncateFromDayIndex = (startIndex) => {
     const day = days[startIndex];
@@ -697,22 +689,26 @@ export function RouteBuilderPanel() {
               ) : (
                 <div>
                   {reachableHuts.map((candidate) => (
-                    <StageCard
-                      key={candidate.hut_id}
-                      //label="Destination"
-                      toName={candidate.name}
-					  via={candidate.segments === 2 && candidate.via ? candidate.via : null}
-                      distanceKm={
-                        candidate.distance_km ?? candidate.total_distance_km
-                      }
-                      dplusM={candidate.dplus_m ?? candidate.total_dplus_m}
-                      dminusM={candidate.dminus_m ?? candidate.total_dminus_m}
-                      isCandidate
-					  isActive={hoveredReachableHutId === candidate.hut_id}
-                      onAdd={() => handleAddStageFromCandidate(candidate)}
-					  
-                    />
-                  ))}
+				  <StageCard
+					key={candidate.hut_id}
+					//label="Destination"
+					toName={candidate.name}
+					via={candidate.segments === 2 && candidate.via ? candidate.via : null}
+					distanceKm={
+					  candidate.distance_km ?? candidate.total_distance_km
+					}
+					dplusM={candidate.dplus_m ?? candidate.total_dplus_m}
+					dminusM={candidate.dminus_m ?? candidate.total_dminus_m}
+					isCandidate
+					isActive={hoveredReachableHutId === candidate.hut_id}
+					onAdd={() => handleAddStageFromCandidate(candidate)}
+					// 👇 AJOUTS pour le hover
+					hutId={candidate.hut_id}
+					onHoverStart={setHoveredReachableHutId}
+					onHoverEnd={() => setHoveredReachableHutId(null)}
+				  />
+				))}
+
                 </div>
               )}
             </section>
@@ -786,6 +782,7 @@ export function RouteBuilderPanel() {
 		  days={days}
 		  reachableHuts={reachableHuts}
 		  onSelectReachableHut={handleAddStageFromCandidate}
+		  hoveredReachableHutId={hoveredReachableHutId} 
 		  setHoveredReachableHutId={setHoveredReachableHutId}
 		/>
 
