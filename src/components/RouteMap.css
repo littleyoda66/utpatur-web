@@ -1,56 +1,35 @@
-/* Base du marker */
-.hut-marker {
-  position: relative;
-  width: 24px;
-  height: 24px;
-}
+/* src/components/RouteMap.css */
 
-/* On centre le cercle au milieu de l'icône */
-.hut-marker__circle {
-  width: 16px;              /* diamètre du disque interne */
-  height: 16px;
-  border-radius: 999px;
-  box-sizing: border-box;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
+/* Styles pour les CircleMarker avec classes personnalisées */
 
-
-/* Itinéraire uniquement : disque plein bleu + petit bord clair */
-.hut-marker--route .hut-marker__circle {
-  background-color: #1e3a8a;        /* bleu foncé */
-  border: 2px solid #e5e7eb;        /* liseré clair */
-}
-
-/* Candidate uniquement : anneau orange + halo blanc pour contraster sur topo */
-.hut-marker--candidate .hut-marker__circle {
+/* Candidate : anneau orange + halo blanc */
+.circle-marker-candidate {
   background-color: transparent;
   border: 3px solid #f59e0b;        /* anneau plus épais */
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); /* halo blanc */
+  
 }
 
-/* Itinéraire + candidate : disque bleu + anneau orange + halo */
-.hut-marker--both .hut-marker__circle {
+/* Both : disque bleu + anneau orange + halo blanc */
+.circle-marker-both {
   background-color: #1e3a8a;        /* disque plein */
   border: 3px solid #f59e0b;        /* anneau orange */
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9); /* halo blanc */
+  
 }
-
 
 /* Wrapper Leaflet pour le badge */
 .leaflet-div-icon.hut-badge-wrapper {
-  background: transparent;
-  border: none;
+  background: transparent !important;
+  border: none !important;
   width: auto !important;
   height: auto !important;
-  pointer-events: none; /* pour ne pas bloquer les clics sur la cabane */
+  pointer-events: none;
 }
 
 /* Le pill lui-même */
 .hut-badge-pill {
-  transform: translate(8px, -8px); /* à droite et un peu au-dessus du cercle */
+  transform: translate(8px, -8px);
   display: inline-block;
   padding: 2px 6px;
   border-radius: 999px;
@@ -70,7 +49,7 @@
   color: #ffffff;
 }
 
-/* Arrivée : [ → 6 ] / [ 2, → 6 ] – violet */
+/* Arrivée : [ → 6 ] / [ 2, → 6 ] — violet */
 .hut-badge-pill--end {
   border-color: #a855f7;
   background-color: rgba(168, 85, 247, 0.8);

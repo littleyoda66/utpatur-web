@@ -13,28 +13,51 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './RouteMap.css';
-import { getCountryFlag } from '../utils/getCountryFlag';
-
 
 const { BaseLayer, Overlay } = LayersControl;
 
 // -----------------------------------------------------------------------------
 // FitBounds sur l'ensemble des positions (itinéraire + candidates)
 // -----------------------------------------------------------------------------
-function FitBoundsOnRoute({ positions }) {
+function FitBoundsOnRoute({ positions, selectedCount, reachableCount }) {
   const map = useMap();
+  const prevCountsRef = React.useRef({ selected: 0, reachable: 0 });
 
   useEffect(() => {
     if (!positions || positions.length === 0) return;
 
-    if (positions.length === 1) {
-      map.setView(positions[0], 9);
-      return;
-    }
+    // Vérifier si le nombre de cabanes sélectionnées ou atteignables a changé
+    const prevCounts = prevCountsRef.current;
+    const countsChanged = 
+      prevCounts.selected !== selectedCount || 
+      prevCounts.reachable !== reachableCount;
+    
+    // Mettre à jour les refs
+    prevCountsRef.current = { selected: selectedCount, reachable: reachableCount };
 
-    const bounds = L.latLngBounds(positions);
-    map.fitBounds(bounds, { padding: [40, 40] });
-  }, [map, positions]);
+    // Ne recalculer que si les counts ont changé
+    if (!countsChanged) return;
+
+    // Petit délai pour laisser le temps aux markers de se placer
+    const timer = setTimeout(() => {
+      if (positions.length === 1) {
+        map.setView(positions[0], 10);
+        return;
+      }
+
+      const bounds = L.latLngBounds(positions);
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { 
+          padding: [40, 40], 
+          maxZoom: 11,
+          animate: true,
+          duration: 0.3
+        });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [map, positions, selectedCount, reachableCount]);
 
   return null;
 }
@@ -42,25 +65,6 @@ function FitBoundsOnRoute({ positions }) {
 // -----------------------------------------------------------------------------
 // Construction du texte de badge (jours) pour une cabane
 // -----------------------------------------------------------------------------
-/*
-Règles figées :
-
-Jours normaux :
-  [ 2 ]        => "2"
-  [ 0, 3 ]     => "0, 3"
-
-Départ :
-  [ 0 → ]      => "0 →"
-  [ 0 →, 3 ]   => "0 →, 3"
-
-Arrivée :
-  [ → 4 ]      => "→ 4"
-  [ 2, → 5 ]   => "2, → 5"
-
-Cabane qui est à la fois départ ET arrivée (boucle) :
-  [ → 0 → ]          => "→ 0 →"
-  [ 0 →, 2, → 5 ]    => "0 →, 2, → 5"
-*/
 function buildBadgeLabel(dayIndices, firstDayIndex, lastDayIndex) {
   if (!dayIndices || dayIndices.length === 0) return null;
 
@@ -80,30 +84,24 @@ function buildBadgeLabel(dayIndices, firstDayIndex, lastDayIndex) {
   // Départ uniquement
   if (hasStart && !hasEnd) {
     if (others.length === 0) {
-      // [ 0 → ]
       return `${firstDayIndex} →`;
     }
-    // [ 0 →, 3 ]
     return `${firstDayIndex} →, ${others.join(', ')}`;
   }
 
   // Arrivée uniquement
   if (!hasStart && hasEnd) {
     if (others.length === 0) {
-      // [ → 4 ]
       return `→ ${lastDayIndex}`;
     }
-    // [ 2, → 5 ]
     return `${others.join(', ')}, → ${lastDayIndex}`;
   }
 
   // Cabane qui est à la fois départ ET arrivée
   if (hasStart && hasEnd) {
     if (others.length === 0) {
-      // [ → 0 → ]
       return `→ ${firstDayIndex} →`;
     }
-    // [ 0 →, 2, → 5 ]
     return `${firstDayIndex} →, ${others.join(', ')}, → ${lastDayIndex}`;
   }
 
@@ -113,69 +111,101 @@ function buildBadgeLabel(dayIndices, firstDayIndex, lastDayIndex) {
 // -----------------------------------------------------------------------------
 // Construction des données de markers (rôle + jours + départ/arrivée)
 // -----------------------------------------------------------------------------
-function buildMarkersData(days, reachableHuts) {
+function buildMarkersData(selectedHuts, reachableHuts, allHutsById = {}) {
   const markersMap = new Map();
+  const viaHutIds = new Set(); // Pour tracker les cabanes qui sont des "via"
 
-  // Tous les dayIndex utilisés dans l’itinéraire
+  // Tous les dayIndex utilisés dans l'itinéraire
   const allDayIndices = [];
-  (days || []).forEach((day, index) => {
-    if (!day || !day.hut) return;
-    const dayIndex =
-      typeof day.dayIndex === 'number' ? day.dayIndex : index;
-    allDayIndices.push(dayIndex);
+  (selectedHuts || []).forEach((hut, index) => {
+    if (!hut) return;
+    allDayIndices.push(index);
   });
 
   const hasRoute = allDayIndices.length > 0;
   const firstDayIndex = hasRoute ? Math.min(...allDayIndices) : null;
   const lastDayIndex = hasRoute ? Math.max(...allDayIndices) : null;
 
-  // 1) Cabanes de l’itinéraire
-  (days || []).forEach((day, index) => {
-    const hut = day?.hut;
+  // 1) Cabanes de l'itinéraire
+  (selectedHuts || []).forEach((hut, index) => {
     if (!hut) return;
 
-    const hutId =
-      hut.hut_id != null ? hut.hut_id : hut.id != null ? hut.id : null;
+    const hutId = hut.hut_id != null ? hut.hut_id : hut.id != null ? hut.id : null;
     if (hutId == null) return;
-
-    const dayIndex =
-      typeof day.dayIndex === 'number' ? day.dayIndex : index;
 
     if (!markersMap.has(hutId)) {
       markersMap.set(hutId, {
         hutId,
         hut,
-        dayIndices: [dayIndex],
+        dayIndices: [index],
         isInRoute: true,
         isCandidate: false,
+        isVia: false,
         reachableRaw: null,
       });
     } else {
       const entry = markersMap.get(hutId);
       entry.isInRoute = true;
-      entry.dayIndices.push(dayIndex);
+      entry.dayIndices.push(index);
+    }
+
+    // Extraire les cabanes "via" des steps (segments > 1)
+    if (hut.steps && hut.steps.length > 1) {
+      // Pour chaque step intermédiaire, le to_hut_id est une cabane via
+      // (sauf le dernier step qui mène à la destination finale)
+      for (let i = 0; i < hut.steps.length - 1; i++) {
+        const step = hut.steps[i];
+        const viaHutId = step.to_hut_id;
+        if (viaHutId && viaHutId !== hutId) {
+          viaHutIds.add(viaHutId);
+        }
+      }
     }
   });
 
   // 2) Cabanes atteignables (candidates)
   (reachableHuts || []).forEach((rh) => {
     if (!rh) return;
-    const hutId = rh.hut_id;
+    
+    // Structure directe : { hut_id, name, latitude, longitude, ... }
+    const hutId = rh.hut_id || rh.id;
     if (hutId == null) return;
+
+    // Construire un objet hut compatible
+    const hutData = {
+      hut_id: hutId,
+      id: hutId,
+      name: rh.name,
+      latitude: rh.latitude,
+      longitude: rh.longitude,
+      country_code: rh.country_code
+    };
 
     if (!markersMap.has(hutId)) {
       markersMap.set(hutId, {
         hutId,
-        hut: rh,
+        hut: hutData,
         dayIndices: [],
         isInRoute: false,
         isCandidate: true,
+        isVia: false,
         reachableRaw: rh,
       });
     } else {
       const entry = markersMap.get(hutId);
       entry.isCandidate = true;
       entry.reachableRaw = rh;
+    }
+
+    // Extraire aussi les cabanes via des candidates (pour preview)
+    if (rh.steps && rh.steps.length > 1) {
+      for (let i = 0; i < rh.steps.length - 1; i++) {
+        const step = rh.steps[i];
+        const viaHutId = step.to_hut_id;
+        if (viaHutId && viaHutId !== hutId) {
+          viaHutIds.add(viaHutId);
+        }
+      }
     }
   });
 
@@ -214,12 +244,106 @@ function buildMarkersData(days, reachableHuts) {
     };
   });
 
-  return { markers, hasRoute, firstDayIndex, lastDayIndex };
+  return { markers, hasRoute, firstDayIndex, lastDayIndex, viaHutIds };
+}
+
+// -----------------------------------------------------------------------------
+// Style du CircleMarker selon le rôle
+// -----------------------------------------------------------------------------
+function getCircleMarkerStyle(role, isHovered = false) {
+  // Agrandir le rayon si hover sur une candidate
+  const hoverBonus = isHovered ? 3 : 0;
+
+  if (role === 'route') {
+    // Disque plein bleu + bordure claire (rayon 7px = diamètre 14px)
+    return {
+      radius: 7,
+      pathOptions: {
+        fillColor: '#1e3a8a',
+        fillOpacity: 1,
+        color: '#e5e7eb',
+        weight: 2,
+      }
+    };
+  }
+
+  if (role === 'candidate') {
+    // Cercle orange visible mais plus petit
+    return {
+      radius: isHovered ? 9 : 7,
+      pathOptions: {
+        fillColor: '#ff8c00',
+        fillOpacity: isHovered ? 0.8 : 0.5,
+        color: '#7c2d12',
+        weight: 2,
+        opacity: 1,
+      }
+    };
+  }
+
+  if (role === 'both') {
+    // Disque bleu + anneau orange (rayon 7px)
+    return {
+      radius: 7 + hoverBonus,
+      pathOptions: {
+        fillColor: '#1e3a8a',
+        fillOpacity: 1,
+        color: '#f59e0b',
+        weight: isHovered ? 4 : 3,
+      }
+    };
+  }
+
+  if (role === 'via') {
+    // Petit disque blanc + fine bordure grise (rayon 5px = diamètre 10px)
+    return {
+      radius: 5,
+      pathOptions: {
+        fillColor: '#ffffff',
+        fillOpacity: 1,
+        color: '#d1d5db',
+        weight: 1.5,
+      }
+    };
+  }
+
+  // Fallback
+  return {
+    radius: 7,
+    pathOptions: {
+      fillColor: '#6b7280',
+      fillOpacity: 1,
+      color: '#ffffff',
+      weight: 2,
+    }
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Création d'une icône pill pour le badge (numéro de séquence)
+// -----------------------------------------------------------------------------
+function createBadgeIcon(marker) {
+  if (!marker.badgeLabel) return null;
+
+  let pillClass = 'hut-badge-pill';
+  if (marker.isStart && !marker.isEnd) {
+    pillClass += ' hut-badge-pill--start';
+  } else if (marker.isEnd && !marker.isStart) {
+    pillClass += ' hut-badge-pill--end';
+  } else if (marker.isStart && marker.isEnd) {
+    pillClass += ' hut-badge-pill--start'; // ou une classe spéciale pour boucle
+  }
+
+  return L.divIcon({
+    className: 'hut-badge-wrapper',
+    html: `<div class="${pillClass}">${marker.badgeLabel}</div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
 }
 
 // -----------------------------------------------------------------------------
 // Décodage d'une polyline encodée ORS avec elevation (lat, lon, z)
-// On ignore la 3e dimension (altitude) et on renvoie [lat, lon] pour Leaflet.
 // -----------------------------------------------------------------------------
 function decodePolyline(encoded) {
   if (!encoded || typeof encoded !== 'string') {
@@ -238,7 +362,7 @@ function decodePolyline(encoded) {
     let shift = 0;
     let b;
 
-    // --- latitude ---
+    // latitude
     do {
       if (index >= len) break;
       b = encoded.charCodeAt(index++) - 63;
@@ -248,7 +372,7 @@ function decodePolyline(encoded) {
     const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1);
     lat += deltaLat;
 
-    // --- longitude ---
+    // longitude
     result = 0;
     shift = 0;
     do {
@@ -260,7 +384,7 @@ function decodePolyline(encoded) {
     const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1);
     lng += deltaLng;
 
-    // --- altitude (3e dimension), présente car on a "elevation: true" côté ORS ---
+    // altitude (3e dimension)
     result = 0;
     shift = 0;
     if (index < len) {
@@ -270,312 +394,206 @@ function decodePolyline(encoded) {
         result |= (b & 0x1f) << shift;
         shift += 5;
       } while (b >= 0x20);
-      // const deltaZ = (result & 1) ? ~(result >> 1) : (result >> 1);
-      // on pourrait cumuler z ici, mais on n'en a pas besoin pour le tracé
     }
 
-    // ORS → lat / lon avec précision 1e5
     coordinates.push([lat / PRECISION, lng / PRECISION]);
   }
 
   return coordinates;
 }
 
-
-
 // -----------------------------------------------------------------------------
-// Construction de la géométrie de l'itinéraire
-// - retourne une liste de segments avec un flag isApprox
-//   + une liste aplatie de tous les points pour le fitBounds
+// Construction des segments de polyline
 // -----------------------------------------------------------------------------
-function buildPolylinePositions(days) {
+function buildRouteSegments(selectedHuts) {
   const segments = [];
-  const allPositions = [];
 
-  if (!days || days.length === 0) {
-    return { segments, allPositions };
-  }
+  for (let i = 1; i < selectedHuts.length; i++) {
+    const prevHut = selectedHuts[i - 1];
+    const currHut = selectedHuts[i];
 
-  const safeDays = Array.isArray(days) ? days : [];
+    if (!prevHut || !currHut) continue;
 
-  // On ajoute toujours la cabane de départ dans allPositions,
-  // pour que la carte ait au moins un point dès la première cabane.
-  if (safeDays.length > 0) {
-    const firstDay = safeDays[0];
-    const firstHut = firstDay && firstDay.hut;
-    if (
-      firstHut &&
-      typeof firstHut.latitude === 'number' &&
-      typeof firstHut.longitude === 'number'
-    ) {
-      allPositions.push([firstHut.latitude, firstHut.longitude]);
-    }
-  }
-
-  const pushSegment = (positions, isApprox) => {
-    if (!positions || positions.length < 2) return;
-
-    const [firstLat, firstLng] = positions[0];
-    const [lastLat, lastLng] = positions[positions.length - 1];
-
-    // On ignore les segments de longueur nulle
-    if (firstLat === lastLat && firstLng === lastLng) {
-      return;
-    }
-
-    const seg = {
-      positions,
-      isApprox: !!isApprox,
-    };
-    segments.push(seg);
-    positions.forEach((p) => {
-      allPositions.push(p);
-    });
-  };
-
-  for (let i = 0; i < safeDays.length; i += 1) {
-    const day = safeDays[i];
-    if (!day || !day.hut) continue;
-
-    const hut = day.hut;
-    if (
-      typeof hut.latitude !== 'number' ||
-      typeof hut.longitude !== 'number'
-    ) {
-      continue;
-    }
-
-    if (i === 0) {
-      // Jour 0 : cabane de départ, aucun segment à tracer
-      continue;
-    }
-
-    const prevDay = safeDays[i - 1];
-    if (!prevDay || !prevDay.hut) {
-      continue;
-    }
-
-    const prevHut = prevDay.hut;
-    if (
-      typeof prevHut.latitude !== 'number' ||
-      typeof prevHut.longitude !== 'number'
-    ) {
-      continue;
-    }
-
-    const startLatLng = [prevHut.latitude, prevHut.longitude];
-    const endLatLng = [hut.latitude, hut.longitude];
-
-    const seg =
-      day.segmentFromPrevious || day.segment_from_previous || null;
-    const viaHut =
-      seg && (seg.viaHut || seg.via_hut)
-        ? seg.viaHut || seg.via_hut
-        : null;
-    const steps = seg && Array.isArray(seg.steps) ? seg.steps : [];
-
-    // Aucun segmentFromPrevious : on trace un segment simple (approx)
-    if (!seg) {
-      pushSegment([startLatLng, endLatLng], true);
-      continue;
-    }
-
-    // Pas de steps ORS : fallback "points droits" (via éventuel) => tout en pointillé
-    if (!steps || steps.length === 0) {
-      const positions = [startLatLng];
-
+    const steps = currHut.steps || [];
+    
+    if (steps.length === 0) {
+      // Ligne droite approximative
       if (
-        viaHut &&
-        typeof viaHut.latitude === 'number' &&
-        typeof viaHut.longitude === 'number'
+        typeof prevHut.latitude === 'number' &&
+        typeof prevHut.longitude === 'number' &&
+        typeof currHut.latitude === 'number' &&
+        typeof currHut.longitude === 'number'
       ) {
-        positions.push([viaHut.latitude, viaHut.longitude]);
+        segments.push({
+          positions: [
+            [prevHut.latitude, prevHut.longitude],
+            [currHut.latitude, currHut.longitude],
+          ],
+          isApprox: true,
+        });
       }
-
-      positions.push(endLatLng);
-      pushSegment(positions, true);
-      continue;
-    }
-
-    // Steps présents : mélange géométrie ORS + segments droits approximatifs
-    let currentPoint = startLatLng;
-
-    const decodedSteps = steps.map((step) => {
-      const encoded =
-        step && typeof step.geometry_polyline === 'string'
-          ? step.geometry_polyline
-          : null;
-      const coords = encoded ? decodePolyline(encoded) : [];
-      return {
-        hasGeometry: !!encoded && coords.length > 1,
-        coords,
-      };
-    });
-
-    for (
-      let stepIndex = 0;
-      stepIndex < decodedSteps.length;
-      stepIndex += 1
-    ) {
-      const stepGeom = decodedSteps[stepIndex];
-
-      if (stepGeom.hasGeometry) {
-        const coords = stepGeom.coords;
-
-        // Petit segment approx entre le point courant et le début de la géométrie
-        if (currentPoint) {
-          const first = coords[0];
-          const approxPositions = [currentPoint, first];
-          pushSegment(approxPositions, true);
-        }
-
-        // Segment ORS en trait plein
-        pushSegment(coords, false);
-
-        currentPoint = coords[coords.length - 1];
-      } else {
-        // Pas de géométrie : segment droit approximatif vers le prochain "anchor"
-        let nextAnchor = null;
-
-        for (
-          let j = stepIndex + 1;
-          j < decodedSteps.length;
-          j += 1
-        ) {
-          const nextGeom = decodedSteps[j];
-          if (nextGeom.hasGeometry && nextGeom.coords.length > 0) {
-            nextAnchor = nextGeom.coords[0];
-            break;
+    } else {
+      // Segments avec géométrie ORS
+      steps.forEach((step) => {
+        const poly = step.geometry_polyline || step.geometry?.polyline;
+        if (poly) {
+          const decoded = decodePolyline(poly);
+          if (decoded.length > 0) {
+            segments.push({
+              positions: decoded,
+              isApprox: false,
+            });
           }
         }
+      });
+    }
+  }
 
-        if (!nextAnchor) {
-          nextAnchor = endLatLng;
-        }
+  return segments;
+}
 
-        if (currentPoint && nextAnchor) {
-          const approxPositions = [currentPoint, nextAnchor];
-          pushSegment(approxPositions, true);
-          currentPoint = nextAnchor;
+// -----------------------------------------------------------------------------
+// Extraction des positions des cabanes "via" (points de jonction entre segments)
+// -----------------------------------------------------------------------------
+function extractViaPositions(selectedHuts) {
+  const viaPositions = [];
+
+  for (let i = 1; i < selectedHuts.length; i++) {
+    const currHut = selectedHuts[i];
+    if (!currHut) continue;
+
+    const steps = currHut.steps || [];
+    
+    // S'il y a plus d'un step, les points de jonction sont des cabanes via
+    if (steps.length > 1) {
+      for (let j = 0; j < steps.length - 1; j++) {
+        const step = steps[j];
+        const poly = step.geometry_polyline || step.geometry?.polyline;
+        if (poly) {
+          const decoded = decodePolyline(poly);
+          if (decoded.length > 0) {
+            // Le dernier point du segment est la position de la cabane via
+            const lastPoint = decoded[decoded.length - 1];
+            viaPositions.push({
+              hutId: step.to_hut_id,
+              position: lastPoint,
+              name: `Via ${step.to_hut_id}` // On n'a pas le nom, juste l'ID
+            });
+          }
         }
       }
     }
-
-    // On s'assure de "rejoindre" la cabane d'arrivée
-    if (currentPoint) {
-      const approxToEnd = [currentPoint, endLatLng];
-      pushSegment(approxToEnd, true);
-    }
   }
 
-  return { segments, allPositions };
+  return viaPositions;
 }
 
 // -----------------------------------------------------------------------------
-// Style du cercle (CircleMarker) selon le rôle + hover
+// Composant HutMarker avec gestion du tooltip au hover externe
 // -----------------------------------------------------------------------------
-function getCircleStyle(marker, isHovered = false) {
-  const baseRadius = 6;
-  const routeColor = '#1e3a8a';
-  const orange = '#f59e0b';
-
-  let radius = baseRadius;
-  let pathOptions;
-
-  switch (marker.role) {
-    case 'route':
-      pathOptions = {
-        color: '#e5e7eb', // bord clair
-        weight: 2,
-        fillColor: routeColor,
-        fillOpacity: 1,
-      };
-      break;
-    case 'candidate':
-      radius = baseRadius + 1;
-      pathOptions = {
-        color: orange,
-        weight: 3, // anneau bien visible
-        fillColor: '#ffffff',
-        fillOpacity: 0.9, // effet “anneau” sur fond clair
-      };
-      break;
-    case 'both':
-    default:
-      radius = baseRadius + 1;
-      pathOptions = {
-        color: orange,
-        weight: 3,
-        fillColor: routeColor,
-        fillOpacity: 1,
-      };
-      break;
-  }
-
-  if (isHovered) {
-    radius += 2;
-    pathOptions = {
-      ...pathOptions,
-      weight: (pathOptions.weight || 2) + 1,
-    };
-  }
-
-  return { radius, pathOptions };
-}
-
-// -----------------------------------------------------------------------------
-// Badge en DivIcon (pills) – ne touche pas à la géométrie
-// -----------------------------------------------------------------------------
-function createBadgeIcon(marker) {
-  const { badgeLabel, isStart, isEnd } = marker;
-  if (!badgeLabel) return null;
-
-  const pillClasses = ['hut-badge-pill'];
-  if (isStart) pillClasses.push('hut-badge-pill--start');
-  if (isEnd) pillClasses.push('hut-badge-pill--end');
-
-  const html = `<div class="${pillClasses.join(
-    ' ',
-  )}">${badgeLabel}</div>`;
-
-  return L.divIcon({
-    className: 'hut-badge-wrapper',
-    html,
-    iconSize: [0, 0], // taille auto laissée au CSS
-    iconAnchor: [0, 0],
-  });
-}
-
-// -----------------------------------------------------------------------------
-// Composant principal
-// -----------------------------------------------------------------------------
-export function RouteMap({
-  days,
-  reachableHuts,
-  onSelectReachableHut,
-  hoveredReachableHutId,
-  setHoveredReachableHutId,
+function HutMarker({ 
+  marker, 
+  isHovered, 
+  isClickable, 
+  reachableHuts, 
+  onHutHover, 
+  onHutClick 
 }) {
-  const safeDays = days || [];
-  const safeReachable = reachableHuts || [];
+  const circleRef = React.useRef(null);
+  const hut = marker.hut;
+  
+  // Ouvrir/fermer le tooltip quand isHovered change (hover depuis la liste)
+  React.useEffect(() => {
+    if (circleRef.current) {
+      if (isHovered) {
+        circleRef.current.openTooltip();
+      } else {
+        circleRef.current.closeTooltip();
+      }
+    }
+  }, [isHovered]);
 
-  const {
-  segments: routeSegments,
-  allPositions: polylinePositions,
-} = useMemo(
-  () => buildPolylinePositions(safeDays),
-  [safeDays],
-);
+  if (
+    !hut ||
+    typeof hut.latitude !== 'number' ||
+    typeof hut.longitude !== 'number'
+  ) {
+    return null;
+  }
 
+  const position = [hut.latitude, hut.longitude];
+  const circleStyle = getCircleMarkerStyle(marker.role, isHovered);
+  const badgeIcon = createBadgeIcon(marker);
 
-  const { markers, hasRoute } = useMemo(
-    () => buildMarkersData(safeDays, safeReachable),
-    [safeDays, safeReachable],
+  return (
+    <React.Fragment>
+      <CircleMarker
+        ref={circleRef}
+        center={position}
+        pathOptions={circleStyle.pathOptions}
+        radius={circleStyle.radius}
+        eventHandlers={isClickable ? {
+          mouseover: () => onHutHover(marker.hutId),
+          mouseout: () => onHutHover(null),
+          click: () => {
+            const reachableHut = reachableHuts.find(
+              rh => (rh.hut_id || rh.id) === marker.hutId
+            );
+            if (reachableHut) {
+              onHutClick(reachableHut);
+            }
+          }
+        } : {}}
+      >
+        <Tooltip direction="top" offset={[0, -12]}>
+          {hut.name}
+        </Tooltip>
+      </CircleMarker>
+
+      {badgeIcon && (
+        <Marker
+          position={position}
+          icon={badgeIcon}
+          interactive={false}
+        />
+      )}
+    </React.Fragment>
+  );
+}
+export function RouteMap({ 
+  selectedHuts = [], 
+  reachableHuts = [],
+  hoveredHutId = null,
+  onHutHover = () => {},
+  onHutClick = () => {}
+}) {
+  const { markers, hasRoute, viaHutIds } = useMemo(
+    () => buildMarkersData(selectedHuts, reachableHuts),
+    [selectedHuts, reachableHuts]
   );
 
-  // Pour le fitBounds : polyline + toutes les cabanes (route + candidates)
+  const routeSegments = useMemo(
+    () => buildRouteSegments(selectedHuts),
+    [selectedHuts]
+  );
+
+  const viaPositions = useMemo(
+    () => extractViaPositions(selectedHuts),
+    [selectedHuts]
+  );
+
+  const polylinePositions = useMemo(() => {
+    const pts = [];
+    routeSegments.forEach((seg) => {
+      pts.push(...seg.positions);
+    });
+    return pts;
+  }, [routeSegments]);
+
   const allPositions = useMemo(() => {
     const pts = [...polylinePositions];
+    
+    // Ajouter les positions de tous les markers (route + candidates)
     markers.forEach((m) => {
       const hut = m.hut;
       if (
@@ -586,85 +604,43 @@ export function RouteMap({
         pts.push([hut.latitude, hut.longitude]);
       }
     });
+    
+    // Ajouter explicitement les candidates (au cas où markers ne les inclut pas toutes)
+    reachableHuts.forEach((rh) => {
+      if (
+        rh &&
+        typeof rh.latitude === 'number' &&
+        typeof rh.longitude === 'number'
+      ) {
+        pts.push([rh.latitude, rh.longitude]);
+      }
+    });
+    
     return pts;
-  }, [polylinePositions, markers]);
+  }, [polylinePositions, markers, reachableHuts]);
 
   const defaultCenter = useMemo(() => {
     if (polylinePositions.length > 0) {
-      return polylinePositions[polylinePositions.length - 1];
+      return polylinePositions[0];
     }
     if (allPositions.length > 0) {
       return allPositions[0];
     }
-    // fallback grossier (Laponie)
     return [68.0, 19.0];
   }, [polylinePositions, allPositions]);
 
-  // Etat vide : pas encore de cabane dans l’itinéraire
-  if (!hasRoute || polylinePositions.length === 0) {
-    return (
-      <div
-        style={{
-          borderRadius: '0.75rem',
-          border: '1px solid #e5e7eb',
-          padding: '0.75rem 1rem',
-          background: '#ffffff',
-        }}
-      >
-        <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-          Carte géographique
-        </h3>
-        <p style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-          Choisis une cabane de départ pour voir l’itinéraire sur la carte.
-        </p>
-        <div
-          style={{
-            marginTop: '0.5rem',
-            borderRadius: '0.75rem',
-            border: '1px dashed #e5e7eb',
-            padding: '1rem',
-            fontSize: '0.8rem',
-            color: '#9ca3af',
-            textAlign: 'center',
-            minHeight: '330px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          Aucune cabane sélectionnée.
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div
-      style={{
-        borderRadius: '0.75rem',
-        border: '1px solid #e5e7eb',
-        padding: '0.75rem 1rem',
-        background: '#ffffff',
-      }}
-    >
-      <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-        Carte géographique
-      </h3>
-
+    <div style={{ height: '100%', width: '100%' }}>
       <MapContainer
         center={defaultCenter}
         zoom={8}
         scrollWheelZoom={true}
         style={{
           width: '100%',
-          height: '720px',
-          borderRadius: '0.75rem',
-          overflow: 'hidden',
+          height: '100%',
         }}
       >
-         {/* Fonds de carte */}
         <LayersControl position="topright">
-          {/* 1. Topo par défaut */}
           <BaseLayer checked name="Topo (OpenTopoMap)">
             <TileLayer
               attribution="Map data: &copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap"
@@ -673,7 +649,6 @@ export function RouteMap({
             />
           </BaseLayer>
 
-          {/* 2. Fond clair très neutre */}
           <BaseLayer name="Clair (CARTO Positron)">
             <TileLayer
               attribution="&copy; OpenStreetMap contributors &copy; CARTO"
@@ -682,7 +657,6 @@ export function RouteMap({
             />
           </BaseLayer>
 
-          {/* 3. OSM standard */}
           <BaseLayer name="OSM standard">
             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
@@ -691,7 +665,6 @@ export function RouteMap({
             />
           </BaseLayer>
 
-          {/* 4. Satellite */}
           <BaseLayer name="Satellite (Esri World Imagery)">
             <TileLayer
               attribution="Tiles &copy; Esri — Source: Esri, Earthstar Geographics"
@@ -699,8 +672,7 @@ export function RouteMap({
               maxZoom={19}
             />
           </BaseLayer>
-		  
-		     {/* Overlay pistes ski (optionnel) */}
+
           <Overlay checked name="Pistes de ski (OpenSnowMap)">
             <TileLayer
               attribution="&copy; OpenStreetMap contributors, tiles &copy; www.opensnowmap.org"
@@ -709,138 +681,66 @@ export function RouteMap({
               opacity={0.8}
             />
           </Overlay>
-        
-
-          
         </LayersControl>
 
-        {/* Ajustement automatique du zoom */}
-        <FitBoundsOnRoute positions={allPositions} />
+        <FitBoundsOnRoute 
+          positions={allPositions} 
+          selectedCount={selectedHuts.length}
+          reachableCount={reachableHuts.length} 
+        />
 
-        {/* Tracé de l’itinéraire */}
+        {/* Tracé de l'itinéraire */}
         {routeSegments.map((seg, idx) => (
-		  <Polyline
-			key={`route-seg-${idx}`}
-			positions={seg.positions}
-			pathOptions={
-			  seg.isApprox
-				? {
-					color: '#1E3A8A',
-					weight: 3,
-					dashArray: '6 6', // segments approximatifs => pointillés
-				  }
-				: {
-					color: '#1E3A8A',
-					weight: 3, // segments ORS => trait plein
-				  }
-			}
-		  />
-		))}
+          <Polyline
+            key={`route-seg-${idx}`}
+            positions={seg.positions}
+            pathOptions={
+              seg.isApprox
+                ? {
+                    color: '#1E3A8A',
+                    weight: 3,
+                    dashArray: '6 6',
+                  }
+                : {
+                    color: '#1E3A8A',
+                    weight: 3,
+                  }
+            }
+          />
+        ))}
 
-        {/* Markers pour les via */}
-        {safeDays.map((day) => {
-          const seg = day.segmentFromPrevious;
-          if (!seg) return null;
-
-          const viaHut = seg.viaHut || seg.via_hut || null;
-          if (
-            !viaHut ||
-            typeof viaHut.latitude !== 'number' ||
-            typeof viaHut.longitude !== 'number'
-          ) {
-            return null;
-          }
-
-          const label = seg.via || viaHut.name || '';
+        {/* Markers pour les cabanes */}
+        {markers.map((marker) => {
+          const isHovered = hoveredHutId === marker.hutId;
+          const isClickable = marker.role === 'candidate' || marker.role === 'both';
 
           return (
-            <CircleMarker
-              key={`via-${day.id}`}
-              center={[viaHut.latitude, viaHut.longitude]}
-              radius={4}
-              pathOptions={{
-                color: '#6b7280',
-                fillColor: '#ffffff',
-                fillOpacity: 1,
-                weight: 1,
-              }}
-            >
-              <Tooltip direction="top" offset={[0, -4]}>
-                {label ? `via ${label}` : 'via ?'}
-              </Tooltip>
-            </CircleMarker>
+            <HutMarker
+              key={marker.hutId}
+              marker={marker}
+              isHovered={isHovered}
+              isClickable={isClickable}
+              reachableHuts={reachableHuts}
+              onHutHover={onHutHover}
+              onHutClick={onHutClick}
+            />
           );
         })}
 
-        {/* Cabanes (cercles + badge pill) */}
-        {markers.map((marker) => {
-          const hut = marker.hut;
-          if (
-            !hut ||
-            typeof hut.latitude !== 'number' ||
-            typeof hut.longitude !== 'number'
-          ) {
-            return null;
-          }
-
-          const position = [hut.latitude, hut.longitude];
-
-          const isHoveredOnMap =
-            hoveredReachableHutId != null &&
-            String(marker.hutId) === String(hoveredReachableHutId);
-
-          const { radius, pathOptions } = getCircleStyle(
-            marker,
-            isHoveredOnMap,
-          );
-
-          const badgeIcon = createBadgeIcon(marker);
-          const isClickableCandidate = marker.isCandidate;
-
+        {/* Markers pour les cabanes "via" (points de passage intermédiaires) */}
+        {viaPositions.map((via, idx) => {
+          const circleStyle = getCircleMarkerStyle('via');
           return (
-            <React.Fragment key={marker.hutId}>
-              <CircleMarker
-                center={position}
-                radius={radius}
-                pathOptions={pathOptions}
-                eventHandlers={{
-                  click: () => {
-                    if (isClickableCandidate && onSelectReachableHut) {
-                      onSelectReachableHut(
-                        marker.reachableRaw || marker.hut,
-                      );
-                    }
-                  },
-                  mouseover: () => {
-                    if (setHoveredReachableHutId && marker.isCandidate) {
-                      setHoveredReachableHutId(marker.hutId);
-                    }
-                  },
-                  mouseout: () => {
-                    if (setHoveredReachableHutId && marker.isCandidate) {
-                      setHoveredReachableHutId(null);
-                    }
-                  },
-                }}
-              >
-                <Tooltip
-                  key={isHoveredOnMap ? 'tooltip-perm' : 'tooltip-hover'}
-                  direction="top"
-                  offset={[0, -4]}
-                  permanent={isHoveredOnMap}
-                >
-                  {hut.name}
-                </Tooltip>
-              </CircleMarker>
-
-              {badgeIcon && (
-                <Marker
-                  position={position}
-                  icon={badgeIcon}
-                  interactive={false}
-                />
-              )}
-            </React.Fragment>
+            <CircleMarker
+              key={`via-${via.hutId}-${idx}`}
+              center={via.position}
+              pathOptions={circleStyle.pathOptions}
+              radius={circleStyle.radius}
+            >
+              <Tooltip direction="top" offset={[0, -8]}>
+                Point de passage
+              </Tooltip>
+            </CircleMarker>
           );
         })}
       </MapContainer>

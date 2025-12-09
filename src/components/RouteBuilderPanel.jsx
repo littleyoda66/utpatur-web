@@ -1,812 +1,551 @@
 // src/components/RouteBuilderPanel.jsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { StageCard } from './StageCard';
-import { getHuts, getReachableHuts } from '../api/utpaturApi';
-import { formatNumber } from '../utils/formatNumber';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouteStore } from '../store/routeStore';
+import { hutsApi } from '../services/api';
+import { HutSearch } from './HutSearch';
+import { ReachableHutsList } from './ReachableHutsList';
 import { RouteMap } from './RouteMap';
-import { getCountryFlag } from '../utils/getCountryFlag';
+import { Trash2, Bed, Compass, TrendingUp, TrendingDown } from 'lucide-react';
+import './RouteBuilderPanel.css';
 
-// Icônes Leaflet globales
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-icon-2x-orange.png',
-  iconUrl:
-    'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-icon-orange.png',
-  shadowUrl:
-    'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-shadow.png',
-  iconSize: [18, 29],
-  iconAnchor: [9, 29],
-  popupAnchor: [1, -24],
-  shadowSize: [30, 30],
-});
-
-// Un "jour" de l'itinéraire
-function createDay({ dayIndex, hut, isRest, segmentFromPrevious }) {
-  return {
-    id: `${hut.hut_id}-${dayIndex}-${isRest ? 'rest' : 'move'}`,
-    dayIndex,
-    hut,
-    isRest: !!isRest,
-    segmentFromPrevious: segmentFromPrevious || null,
-  };
+// Composant drapeau SVG compact
+function Flag({ countryCode, size = 14 }) {
+  if (!countryCode) return null;
+  
+  const code = countryCode.toUpperCase();
+  const height = size * 0.7;
+  
+  if (code === 'NO' || code === 'NOR') {
+    return (
+      <svg className="timeline-flag" viewBox="0 0 22 16" width={size} height={height}>
+        <rect width="22" height="16" fill="#BA0C2F"/>
+        <rect x="6" width="4" height="16" fill="#fff"/>
+        <rect y="6" width="22" height="4" fill="#fff"/>
+        <rect x="7" width="2" height="16" fill="#00205B"/>
+        <rect y="7" width="22" height="2" fill="#00205B"/>
+      </svg>
+    );
+  }
+  
+  if (code === 'SE' || code === 'SWE') {
+    return (
+      <svg className="timeline-flag" viewBox="0 0 16 10" width={size} height={height}>
+        <rect width="16" height="10" fill="#006AA7"/>
+        <rect x="5" width="2" height="10" fill="#FECC00"/>
+        <rect y="4" width="16" height="2" fill="#FECC00"/>
+      </svg>
+    );
+  }
+  
+  if (code === 'FI' || code === 'FIN') {
+    return (
+      <svg className="timeline-flag" viewBox="0 0 18 11" width={size} height={height}>
+        <rect width="18" height="11" fill="#fff"/>
+        <rect x="5" width="3" height="11" fill="#003580"/>
+        <rect y="4" width="18" height="3" fill="#003580"/>
+      </svg>
+    );
+  }
+  
+  return null;
 }
 
 export function RouteBuilderPanel() {
+  const {
+    selectedHuts,
+    reachableHuts,
+    maxDistanceKm,
+    maxSegments,
+    isLoading,
+    error,
+    setStartHut,
+    addHut,
+    removeLastHut,
+    resetRoute,
+    setReachableHuts,
+    setMaxDistance,
+    setMaxSegments,
+    setLoading,
+    setError,
+    clearError,
+    getStats
+  } = useRouteStore();
+
   const [allHuts, setAllHuts] = useState([]);
-  const [isLoadingHuts, setIsLoadingHuts] = useState(false);
-  const [hutsError, setHutsError] = useState('');
+  const [isLoadingHuts, setIsLoadingHuts] = useState(true);
+  const [hoveredHutId, setHoveredHutId] = useState(null);
+  const [startDate, setStartDate] = useState(() => {
+    // Date par défaut : demain
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  });
 
-  const [days, setDays] = useState([]);
-  const [maxDistance, setMaxDistance] = useState(25);
-  const [allowTwoSegments, setAllowTwoSegments] = useState(true);
+  // Fonction pour formater une date
+  const formatDate = (dateStr, dayOffset) => {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() + dayOffset);
+    return date;
+  };
 
-  const [reachableHuts, setReachableHuts] = useState([]);
-  const [isLoadingReachable, setIsLoadingReachable] = useState(false);
-  const [reachableError, setReachableError] = useState('');
-  const [hoveredReachableHutId, setHoveredReachableHutId] = useState(null);
+  const formatDateShort = (date) => {
+    return date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
 
-  const [startSearch, setStartSearch] = useState('');
+  const formatDateFull = (date) => {
+    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  };
 
-  // Charger toutes les cabanes pour la cabane de départ
+  // Formater un nombre avec apostrophe comme séparateur de milliers
+  const formatNumber = (num) => {
+    return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+  };
+
+  // Charger toutes les cabanes au démarrage
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
+    const loadAllHuts = async () => {
       setIsLoadingHuts(true);
-      setHutsError('');
       try {
-        const huts = await getHuts();
-        if (!cancelled) {
-          setAllHuts(huts || []);
-        }
+        // Utiliser hutsApi.list() pour récupérer toutes les cabanes
+        const response = await hutsApi.list();
+        const huts = response.huts || response || [];
+        setAllHuts(Array.isArray(huts) ? huts : []);
       } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setHutsError(
-            err?.message ||
-              'Erreur lors du chargement de la liste des cabanes.',
-          );
-        }
+        console.error('Erreur chargement cabanes:', err);
+        setAllHuts([]);
       } finally {
-        if (!cancelled) setIsLoadingHuts(false);
+        setIsLoadingHuts(false);
       }
-    }
-    load();
-    return () => {
-      cancelled = true;
     };
+
+    loadAllHuts();
   }, []);
 
-  const lastDay = days.length > 0 ? days[days.length - 1] : null;
-  const lastHut = lastDay ? lastDay.hut : null;
-
-  // Nombre de jours affiché : on part de 0 (Jour 0, Jour 1, …)
-  const totalDaysDisplay = lastDay ? lastDay.dayIndex : 0;
-
-  // Cabanes atteignables depuis la fin de l’itinéraire
+  // Charger les cabanes atteignables quand on sélectionne une cabane
   useEffect(() => {
-    if (!lastHut) {
-      setReachableHuts([]);
-      setReachableError('');
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadReachable() {
-      setIsLoadingReachable(true);
-      setReachableError('');
-      try {
-        const maxSegments = allowTwoSegments ? 2 : 1;
-        const reachable = await getReachableHuts(
-          lastHut.hut_id,
-          maxDistance,
-          maxSegments,
-        );
-
-        if (!cancelled) {
-          const list = Array.isArray(reachable) ? reachable : [];
-
-          const enriched = list.map((c) => {
-            const baseHut = allHuts.find((h) => h.hut_id === c.hut_id);
-            if (!baseHut) return c;
-            return {
-              ...c,
-              latitude: c.latitude ?? baseHut.latitude,
-              longitude: c.longitude ?? baseHut.longitude,
-              country_code: c.country_code ?? baseHut.country_code,
-            };
-          });
-
-          setReachableHuts(enriched);
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setReachableError(
-            err?.message ||
-              'Erreur lors du calcul des cabanes atteignables.',
-          );
-        }
-      } finally {
-        if (!cancelled) setIsLoadingReachable(false);
+    const loadReachable = async () => {
+      if (selectedHuts.length === 0) {
+        setReachableHuts([]);
+        return;
       }
-    }
+
+      const lastHut = selectedHuts[selectedHuts.length - 1];
+      const hutId = lastHut.hut_id || lastHut.id;
+      
+      if (!hutId) {
+        console.error('Pas de hut_id trouvé pour:', lastHut);
+        return;
+      }
+      
+      setLoading(true);
+      clearError();
+
+      try {
+        const response = await hutsApi.getReachable(hutId, maxDistanceKm, maxSegments);
+        
+        // Vérifier si la réponse contient une erreur
+        if (response && response.detail) {
+          throw new Error(typeof response.detail === 'string' ? response.detail : JSON.stringify(response.detail));
+        }
+        
+        // Adapter selon la structure de la réponse
+        const huts = response.huts || response.reachable_huts || response || [];
+        
+        // Pas de filtrage : on autorise toutes les cabanes atteignables
+        // même celles déjà visitées (pour permettre les boucles)
+        setReachableHuts(Array.isArray(huts) ? huts : []);
+      } catch (err) {
+        console.error('Erreur chargement cabanes atteignables:', err);
+        const errorMsg = typeof err === 'string' ? err : (err.message || 'Erreur lors du chargement');
+        setError(errorMsg);
+        setReachableHuts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
     loadReachable();
-    return () => {
-      cancelled = true;
-    };
-  }, [lastHut?.hut_id, maxDistance, allowTwoSegments, allHuts]);
-
-  // Résumé de l’itinéraire
-  const totalDistanceKm = useMemo(
-    () =>
-      days.reduce(
-        (sum, d) =>
-          sum +
-          (d.segmentFromPrevious ? d.segmentFromPrevious.distanceKm || 0 : 0),
-        0,
-      ),
-    [days],
-  );
-
-  const totalDplusM = useMemo(
-    () =>
-      days.reduce(
-        (sum, d) =>
-          sum +
-          (d.segmentFromPrevious ? d.segmentFromPrevious.dplusM || 0 : 0),
-        0,
-      ),
-    [days],
-  );
-
-  const totalDminusM = useMemo(
-    () =>
-      days.reduce(
-        (sum, d) =>
-          sum +
-          (d.segmentFromPrevious ? d.segmentFromPrevious.dminusM || 0 : 0),
-        0,
-      ),
-    [days],
-  );
+  }, [selectedHuts, maxDistanceKm, maxSegments]);
 
   const handleSelectStartHut = (hut) => {
-    if (!hut) return;
-    const day0 = createDay({
-      dayIndex: 0,
-      hut,
-      isRest: false,
-      segmentFromPrevious: null,
-    });
-    setDays([day0]);
+    setStartHut(hut);
   };
 
-  const handleResetRoute = () => {
-    if (
-      !window.confirm(
-        'Supprimer tout l’itinéraire et revenir au choix de la cabane de départ ?',
-      )
-    ) {
-      return;
-    }
-    setDays([]);
-    setReachableHuts([]);
-  };
-
-  const handleAddRestDay = () => {
-    if (!lastDay) return;
-    const newDay = createDay({
-      dayIndex: lastDay.dayIndex + 1,
-      hut: lastDay.hut,
-      isRest: true,
-      segmentFromPrevious: null,
-    });
-    setDays((prev) => [...prev, newDay]);
-  };
-
-  const handleAddStageFromCandidate = (candidate) => {
-    if (!lastDay) return;
-
-    let viaHut = null;
-    if (
-      (candidate.segments === 2 || candidate.segments === '2') &&
-      candidate.via
-    ) {
-      viaHut =
-        allHuts.find((h) => h.name === candidate.via) || null;
-    }
-
-    const segment = {
-      distanceKm: candidate.distance_km ?? candidate.total_distance_km ?? 0,
-      dplusM: candidate.dplus_m ?? candidate.total_dplus_m ?? 0,
-      dminusM: candidate.dminus_m ?? candidate.total_dminus_m ?? 0,
-      segments: candidate.segments ?? null,
-      via: candidate.via ?? null,
-      steps: candidate.steps || [], // détail des segments ORS
-      viaHut, // cabane intermédiaire avec latitude / longitude
+  const handleAddHut = (reachableHut) => {
+    // La structure est directe : hut_id, name, total_distance_km, total_dplus_m, etc.
+    const enrichedHut = {
+      hut_id: reachableHut.hut_id,
+      id: reachableHut.hut_id,
+      name: reachableHut.name,
+      latitude: reachableHut.latitude,
+      longitude: reachableHut.longitude,
+      country_code: reachableHut.country_code,
+      // Mapper les propriétés avec les bons noms
+      total_distance: reachableHut.total_distance_km || 0,
+      elevation_gain: reachableHut.total_dplus_m || 0,
+      elevation_loss: reachableHut.total_dminus_m || 0,
+      segments: reachableHut.segments || 1,
+      via: reachableHut.via || null,
+      steps: reachableHut.steps || []
     };
-
-    const toHut =
-      allHuts.find((h) => h.hut_id === candidate.hut_id) || candidate;
-
-    const newDay = createDay({
-      dayIndex: lastDay.dayIndex + 1,
-      hut: toHut,
-      isRest: false,
-      segmentFromPrevious: segment,
-    });
-
-    setDays((prev) => [...prev, newDay]);
+    
+    addHut(enrichedHut, enrichedHut.steps);
   };
 
-  const handleTruncateFromDayIndex = (startIndex) => {
-    const day = days[startIndex];
-    const label = day
-      ? `le jour ${day.dayIndex} (${day.hut.name})`
-      : `le jour ${startIndex}`;
-
-    if (
-      !window.confirm(
-        `Supprimer ${label} et toutes les étapes suivantes ? Cette action est définitive.`,
-      )
-    ) {
-      return;
+  const handleRemoveDay = (index) => {
+    if (index === 0) {
+      resetRoute();
+    } else {
+      const hutsToKeep = selectedHuts.slice(0, index);
+      resetRoute();
+      hutsToKeep.forEach((hut, i) => {
+        if (i === 0) {
+          setStartHut(hut);
+        } else {
+          addHut(hut, hut.steps || []);
+        }
+      });
     }
-
-    setDays((prev) => prev.slice(0, startIndex));
   };
 
-  const filteredStartHuts = useMemo(() => {
-    const q = startSearch.trim().toLowerCase();
-    if (!q) return allHuts.slice(0, 30);
-    return allHuts
-      .filter((h) => h.name && h.name.toLowerCase().includes(q))
-      .slice(0, 30);
-  }, [allHuts, startSearch]);
+  // Ajouter un jour de repos (rester à la même cabane)
+  const handleRestDay = () => {
+    if (!lastHut) return;
+    
+    const restDayHut = {
+      ...lastHut,
+      hut_id: lastHut.hut_id || lastHut.id,
+      id: lastHut.hut_id || lastHut.id,
+      total_distance: 0,
+      elevation_gain: 0,
+      elevation_loss: 0,
+      segments: 0,
+      via: null,
+      steps: [],
+      isRestDay: true
+    };
+    
+    addHut(restDayHut, []);
+  };
 
-  const sliderAccentColor = maxDistance > 30 ? '#dc2626' : '#2563eb';
+  const stats = getStats();
+  const lastHut = selectedHuts.length > 0 ? selectedHuts[selectedHuts.length - 1] : null;
 
-  // Itinéraire schématique (colonne centrale)
-  const renderSchematicRoute = () => {
-    if (days.length === 0) {
-      return (
-        <p style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-          Commence par choisir une cabane de départ dans la colonne de gauche.
-        </p>
-      );
-    }
+  // Calculer les stats manuellement pour éviter les NaN
+  const computedStats = {
+    days: selectedHuts.length > 0 ? selectedHuts.length - 1 : 0,
+    totalDistance: selectedHuts.reduce((sum, hut, i) => {
+      if (i === 0) return 0;
+      return sum + (hut.total_distance || 0);
+    }, 0),
+    totalElevationGain: selectedHuts.reduce((sum, hut, i) => {
+      if (i === 0) return 0;
+      return sum + (hut.elevation_gain || 0);
+    }, 0),
+    totalElevationLoss: selectedHuts.reduce((sum, hut, i) => {
+      if (i === 0) return 0;
+      return sum + (hut.elevation_loss || 0);
+    }, 0)
+  };
 
-    return (
-      <div
-        style={{
-          marginTop: '0.75rem',
-          borderRadius: '0.75rem',
-          border: '1px solid #e5e7eb',
-          padding: '0.75rem 0.75rem',
-          background: '#f9fafb',
-        }}
-      >
-        {days.map((day, index) => (
-          <React.Fragment key={day.id}>
-            {/* Segment depuis le jour précédent */}
-            {index > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '0.75rem',
-                  padding: '0.15rem 0.25rem 0.15rem 0',
-                  marginLeft: '18px',
-                  fontSize: '0.8rem',
-                  color: '#4b5563',
-                }}
-              >
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {/* | grisé à gauche de km */}
-                  <span style={{ color: '#9ca3af' }}>|</span>
-                  {day.isRest || !day.segmentFromPrevious ? (
-                    <span>Jour de repos (aucun déplacement)</span>
-                  ) : (
-                    <>
-                      <span>
-                        {formatNumber(
-                          day.segmentFromPrevious.distanceKm,
-                          1,
-                        )}{' '}
-                        km
-                      </span>
-                      <span>
-                        +
-                        {formatNumber(
-                          day.segmentFromPrevious.dplusM,
-                          0,
-                        )}{' '}
-                        m
-                      </span>
-                      <span>
-                        -
-                        {formatNumber(
-                          day.segmentFromPrevious.dminusM,
-                          0,
-                        )}{' '}
-                        m
-                      </span>
-                    </>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleTruncateFromDayIndex(index)}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    lineHeight: 1,
-                    color: '#9ca3af',
-                  }}
-                  title="Supprimer cette étape et les suivantes"
-                >
-                  ×
-                </button>
-              </div>
-            )}
-
-            {/* Noeud (jour) */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.25rem 0',
-              }}
-            >
-              <div
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '999px',
-                  background: day.isRest ? '#e5e7eb' : '#2563eb',
-                  border: '2px solid #ffffff',
-                  boxShadow: '0 0 0 1px rgba(148,163,184,0.8)',
-                  marginLeft: '12px',
-                  flexShrink: 0,
-                }}
-              />
-              <div
-                style={{
-                  flex: 1,
-                  padding: '0.25rem 0.5rem',
-                  borderRadius: '0.5rem',
-                  background: day.isRest ? '#f3f4f6' : '#ffffff',
-                  border: '1px solid #e5e7eb',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '0.75rem',
-                    color: '#6b7280',
-                    marginBottom: '0.1rem',
-                  }}
-                >
-                  Jour {day.dayIndex}
-                  {day.isRest && ' · repos'}
-                </div>
-
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>
-                  {day.hut.name}
-                </div>
-
-                {index > 0 &&
-                  day.segmentFromPrevious &&
-                  day.segmentFromPrevious.segments === 2 &&
-                  day.segmentFromPrevious.via && (
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        color: '#6b7280',
-                        fontStyle: 'italic',
-                        marginTop: '0.05rem',
-                      }}
-                    >
-                      via {day.segmentFromPrevious.via}
-                    </div>
-                  )}
-              </div>
-
-              {index === 0 && days.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleResetRoute}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                    color: '#9ca3af',
-                    padding: '0 0.25rem',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title="Supprimer tout l’itinéraire"
-                >
-                  Réinitialiser
-                </button>
-              )}
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
-    );
+  // Fonction pour formater les erreurs
+  const formatError = (err) => {
+    if (!err) return null;
+    if (typeof err === 'string') return err;
+    if (err.message) return err.message;
+    if (Array.isArray(err)) return err.map(e => e.msg || e.message || String(e)).join(', ');
+    return String(err);
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        gap: '1.5rem',
-        alignItems: 'flex-start',
-        flexWrap: 'wrap',
-      }}
-    >
-      {/* Colonne gauche : cabane de départ + paramètres + cabanes atteignables */}
-      <div style={{ flex: '1 1 0', minWidth: '360px' }}>
-        {/* Cabane de départ (visible seulement si aucun jour) */}
-        {days.length === 0 && (
-          <section
-            style={{
-              borderRadius: '0.75rem',
-              border: '1px solid #e5e7eb',
-              padding: '0.75rem 1rem',
-              background: '#ffffff',
-              marginBottom: '1rem',
-            }}
-          >
-            <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-              Cabane de départ
-            </h3>
-            <p
-              style={{
-                fontSize: '0.8rem',
-                color: '#6b7280',
-                marginBottom: '0.5rem',
-              }}
-            >
-              Choisis la première cabane de ton itinéraire. Ensuite, tu pourras
-              ajouter des jours de marche ou de repos.
-            </p>
-            <input
-              type="text"
-              value={startSearch}
-              onChange={(e) => setStartSearch(e.target.value)}
-              placeholder="Rechercher une cabane (ex: Unna Allakas)"
-              style={{
-                width: '100%',
-                padding: '0.35rem 0.5rem',
-                fontSize: '0.85rem',
-                borderRadius: '0.5rem',
-                border: '1px solid #d1d5db',
-                marginBottom: '0.5rem',
-              }}
-            />
+    <div className="route-builder-3col">
+      {/* COLONNE GAUCHE */}
+      <div className="route-builder-left">
+        <div className="column-header">
+          <h2>Planification</h2>
+          <p className="text-muted text-sm">
+            Choisissez votre cabane de départ et configurez vos paramètres
+          </p>
+        </div>
 
-            {isLoadingHuts ? (
-              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                Chargement des cabanes…
-              </div>
-            ) : hutsError ? (
-              <div style={{ fontSize: '0.8rem', color: '#b91c1c' }}>
-                {hutsError}
-              </div>
-            ) : (
-              <div
-                style={{
-                  maxHeight: '220px',
-                  overflowY: 'auto',
-                  borderRadius: '0.5rem',
-                  border: '1px solid #e5e7eb',
-                  padding: '0.35rem 0.4rem',
-                }}
-              >
-                {filteredStartHuts.length === 0 ? (
-                  <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
-                    Aucune cabane ne correspond à cette recherche.
-                  </div>
-                ) : (
-                  filteredStartHuts.map((hut) => {
-                    const flag = getCountryFlag(hut.country_code);
+        <div className="column-content">
+          {/* Cabane de départ - cachée une fois sélectionnée */}
+          {selectedHuts.length === 0 && (
+            <div className="section-card">
+              <h3 className="section-title">Cabane de départ</h3>
+              <p className="text-muted text-sm mb-3">
+                Choisissez la première cabane de votre itinéraire
+              </p>
+              <HutSearch
+                huts={allHuts}
+                onSelect={handleSelectStartHut}
+                isLoading={isLoadingHuts}
+                placeholder="Rechercher une cabane (ex: Unna Allakas)"
+              />
+            </div>
+          )}
 
-                    return (
-                      <button
-                        key={hut.hut_id}
-                        type="button"
-                        onClick={() => handleSelectStartHut(hut)}
-                        style={{
-                          display: 'block',
-                          width: '100%',
-                          textAlign: 'left',
-                          padding: '0.3rem 0.4rem',
-                          fontSize: '0.8rem',
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {flag && (
-                          <span style={{ marginRight: '0.35rem' }}>
-                            {flag}
-                          </span>
-                        )}
-                        {hut.name}
-                        {hut.country_code && (
-                          <span
-                            style={{
-                              color: '#9ca3af',
-                              marginLeft: '0.25rem',
-                            }}
-                          >
-                            ({hut.country_code})
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Paramètres + cabanes atteignables */}
-        {days.length > 0 && (
-          <>
-            <section
-              style={{
-                borderRadius: '0.75rem',
-                border: '1px solid #e5e7eb',
-                padding: '0.75rem 1rem',
-                background: '#ffffff',
-                marginBottom: '1rem',
-              }}
-            >
-              <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                Paramètres de la prochaine étape
-              </h3>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
-                  fontSize: '0.8rem',
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      marginBottom: '0.15rem',
-                    }}
-                  >
-                    <span>Distance maximale par jour</span>
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        color: maxDistance > 30 ? '#dc2626' : '#111827',
-                      }}
-                    >
-                      {maxDistance} km
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="40"
-                    value={maxDistance}
-                    onChange={(e) => setMaxDistance(Number(e.target.value))}
-                    style={{
-                      width: '100%',
-                      accentColor: sliderAccentColor,
-                    }}
-                  />
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: '0.7rem',
-                      color: '#9ca3af',
-                    }}
-                  >
-                    <span>0 km</span>
-                    <span>40 km</span>
-                  </div>
+          {/* Paramètres */}
+          {selectedHuts.length > 0 && (
+            <div className="section-card parameters-card">
+              <h3 className="section-title">Paramètres de la prochaine étape</h3>
+              
+              <div className="param-group">
+                <label className="param-label">
+                  <span>Distance maximale par jour</span>
+                  <span className="param-value">{maxDistanceKm} km</span>
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="1"
+                  value={maxDistanceKm}
+                  onChange={(e) => setMaxDistance(parseInt(e.target.value))}
+                  className="slider"
+                />
+                <div className="slider-labels">
+                  <span>0 km</span>
+                  <span>40 km</span>
                 </div>
+              </div>
 
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                  }}
-                >
+              <div className="param-group">
+                <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={allowTwoSegments}
-                    onChange={(e) => setAllowTwoSegments(e.target.checked)}
+                    checked={maxSegments >= 2}
+                    onChange={(e) => setMaxSegments(e.target.checked ? 2 : 1)}
                   />
-                  <span>Autoriser jusqu&apos;à 2 segments</span>
+                  <span>Autoriser jusqu'à 2 segments</span>
                 </label>
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={handleAddRestDay}
-                    style={{
-                      borderRadius: '999px',
-                      border: '1px solid #d1d5db',
-                      padding: '0.35rem 0.75rem',
-                      fontSize: '0.8rem',
-                      background: '#f9fafb',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Ajouter un jour de repos
-                    {lastHut ? ` à ${lastHut.name}` : ''}
-                  </button>
-                </div>
               </div>
-            </section>
+            </div>
+          )}
 
-            <section
-              style={{
-                borderRadius: '0.75rem',
-                border: '1px solid #e5e7eb',
-                padding: '0rem 1rem 0.75rem',
-                background: '#ffffff',
-              }}
-            >
-              <h3 style={{ fontSize: '0.9rem', marginBottom: '0.9rem' }}>
-                Cabanes atteignables depuis{' '}
-                <span style={{ fontWeight: 600 }}>
-                  {lastHut ? lastHut.name : '…'}
-                </span>
+          {/* Cabanes atteignables */}
+          {selectedHuts.length > 0 && (
+            <div className="section-card">
+              <h3 className="section-title">
+                Cabanes atteignables depuis {lastHut?.name}
               </h3>
-
-              {isLoadingReachable ? (
-                <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                  Calcul des cabanes atteignables…
-                </div>
-              ) : reachableError ? (
-                <div style={{ fontSize: '0.8rem', color: '#b91c1c' }}>
-                  {reachableError}
-                </div>
-              ) : reachableHuts.length === 0 ? (
-                <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
-                  Aucune cabane atteignable dans ces conditions.
-                </div>
-              ) : (
-                <div>
-                  {reachableHuts.map((candidate) => (
-                    <StageCard
-                      key={candidate.hut_id}
-                      toName={candidate.name}
-                      via={
-                        candidate.segments === 2 && candidate.via
-                          ? candidate.via
-                          : null
-                      }
-                      distanceKm={
-                        candidate.distance_km ?? candidate.total_distance_km
-                      }
-                      dplusM={candidate.dplus_m ?? candidate.total_dplus_m}
-                      dminusM={
-                        candidate.dminus_m ?? candidate.total_dminus_m
-                      }
-                      isCandidate
-                      isActive={
-                        hoveredReachableHutId === candidate.hut_id
-                      }
-                      onAdd={() =>
-                        handleAddStageFromCandidate(candidate)
-                      }
-                      hutId={candidate.hut_id}
-                      onHoverStart={setHoveredReachableHutId}
-                      onHoverEnd={() =>
-                        setHoveredReachableHutId(null)
-                      }
-                      countryCode={candidate.country_code}
-                    />
-                  ))}
+              
+              {error && (
+                <div className="alert alert-error mb-3">
+                  {formatError(error)}
                 </div>
               )}
-            </section>
-          </>
-        )}
+
+              {isLoading ? (
+                <div className="loading-state">
+                  <div className="spinner" />
+                  <p className="text-sm text-muted">Recherche des cabanes atteignables...</p>
+                </div>
+              ) : reachableHuts.length === 0 ? (
+                <div className="empty-state">
+                  <p className="text-muted text-sm">Aucune cabane atteignable avec ces paramètres.</p>
+                  <p className="text-muted text-xs">Essayez d'augmenter la distance maximale.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Bouton jour de repos */}
+                  <button
+                    className="btn-rest-day"
+                    onClick={handleRestDay}
+                    title="Ajouter un jour de repos à cette cabane"
+                  >
+                    <span className="btn-rest-day-icon"><Bed size={16} /></span>
+                    <span className="btn-rest-day-text">Jour de repos à {lastHut?.name?.split(' ')[0]}...</span>
+                  </button>
+                  
+                  <ReachableHutsList 
+                    huts={reachableHuts} 
+                    onSelect={handleAddHut}
+                    hoveredHutId={hoveredHutId}
+                    onHover={setHoveredHutId}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Message si pas de cabane */}
+          {selectedHuts.length === 0 && (
+            <div className="section-card empty-state">
+              <div className="empty-state-icon">🏔️</div>
+              <h3 className="empty-state-title">Aucune cabane sélectionnée</h3>
+              <p className="text-muted text-sm">
+                Sélectionnez une cabane de départ pour voir les options disponibles
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Colonne centrale : itinéraire en cours */}
-      <div style={{ flex: '1 1 0', minWidth: '360px' }}>
-        <section
-          style={{
-            borderRadius: '0.75rem',
-            border: '1px solid #e5e7eb',
-            padding: '0.75rem 1rem',
-            background: '#ffffff',
-            marginBottom: '1rem',
-          }}
-        >
-          <h3 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-            Itinéraire en cours
-          </h3>
+      {/* COLONNE CENTRALE */}
+      <div className="route-builder-center">
+        <div className="column-header">
+          <h2>Itinéraire en cours</h2>
+        </div>
 
-          {days.length === 0 ? (
-            <p style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-              Aucun jour planifié pour l’instant.
-            </p>
+        <div className="column-content">
+          {selectedHuts.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">📍</div>
+              <h3 className="empty-state-title">Aucun itinéraire</h3>
+              <p className="text-muted text-sm">
+                Commencez par sélectionner une cabane de départ
+              </p>
+            </div>
           ) : (
             <>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '1rem',
-                  fontSize: '0.8rem',
-                  marginBottom: '0.35rem',
-                }}
-              >
-                <div>
-                  <div style={{ color: '#6b7280' }}>Jours</div>
-                  <div style={{ fontWeight: 600 }}>
-                    {totalDaysDisplay}
-                  </div>
+              {/* En-tête du calendrier */}
+              <div className="expedition-header">
+                <div className="expedition-title">
+                  <Compass size={18} strokeWidth={1} className="expedition-icon" />
+                  <span>Expédition</span>
                 </div>
-                <div>
-                  <div style={{ color: '#6b7280' }}>Distance</div>
-                  <div style={{ fontWeight: 600 }}>
-                    {formatNumber(totalDistanceKm, 1)} km
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: '#6b7280' }}>D+ cumulé</div>
-                  <div style={{ fontWeight: 600 }}>
-                    {formatNumber(totalDplusM, 0)} m
-                  </div>
-                </div>
-                <div>
-                  <div style={{ color: '#6b7280' }}>D- cumulé</div>
-                  <div style={{ fontWeight: 600 }}>
-                    {formatNumber(totalDminusM, 0)} m
-                  </div>
+                <div className="expedition-date-picker">
+                  <label htmlFor="start-date">Départ</label>
+                  <input
+                    type="date"
+                    id="start-date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="date-input"
+                  />
                 </div>
               </div>
 
-              {renderSchematicRoute()}
+              {/* Résumé élégant */}
+              <div className="expedition-summary">
+                <div className="expedition-stat">
+                  <span className="expedition-stat-value">{computedStats.days}</span>
+                  <span className="expedition-stat-label">jours</span>
+                </div>
+                <div className="expedition-stat-divider"></div>
+                <div className="expedition-stat">
+                  <span className="expedition-stat-value">{formatNumber(computedStats.totalDistance)}</span>
+                  <span className="expedition-stat-label">km</span>
+                </div>
+                <div className="expedition-stat-divider"></div>
+                <div className="expedition-stat">
+                  <span className="expedition-stat-value expedition-stat-up">
+                    <TrendingUp size={14} strokeWidth={2} />
+                    {formatNumber(computedStats.totalElevationGain)}
+                  </span>
+                  <span className="expedition-stat-label">m</span>
+                </div>
+                <div className="expedition-stat-divider"></div>
+                <div className="expedition-stat">
+                  <span className="expedition-stat-value expedition-stat-down">
+                    <TrendingDown size={14} strokeWidth={2} />
+                    {formatNumber(computedStats.totalElevationLoss)}
+                  </span>
+                  <span className="expedition-stat-label">m</span>
+                </div>
+              </div>
+
+              {/* Calendrier */}
+              <div className="expedition-calendar">
+                {selectedHuts.map((hut, index) => {
+                  const dayDate = formatDate(startDate, index);
+                  const isToday = new Date().toDateString() === dayDate.toDateString();
+                  const nextHut = selectedHuts[index + 1];
+                  const showSegment = nextHut && !nextHut.isRestDay;
+                  
+                  return (
+                    <React.Fragment key={`${hut.hut_id || hut.id}-${index}`}>
+                      {/* Jour */}
+                      <div className={`calendar-day ${index === selectedHuts.length - 1 ? 'calendar-day-current' : ''} ${hut.isRestDay ? 'calendar-day-rest' : ''}`}>
+                        <div className="calendar-day-date">
+                          <span className="calendar-day-weekday">
+                            {dayDate.toLocaleDateString('fr-FR', { weekday: 'short' })}
+                          </span>
+                          <span className="calendar-day-number">
+                            {dayDate.getDate()}
+                          </span>
+                          <span className="calendar-day-month">
+                            {dayDate.toLocaleDateString('fr-FR', { month: 'short' })}
+                          </span>
+                        </div>
+                        
+                        <div className="calendar-day-content">
+                          <div className="calendar-day-header">
+                            <span className={`calendar-day-badge ${hut.isRestDay ? 'calendar-day-badge-rest' : ''}`}>
+                              {hut.isRestDay ? <span className="zzz-icon">Zzz</span> : `J${index}`}
+                            </span>
+                            {index === 0 && <span className="calendar-day-tag">Départ</span>}
+                            {hut.isRestDay && <span className="calendar-day-tag calendar-day-tag-rest">Repos</span>}
+                          </div>
+                          
+                          <div className="calendar-day-hut">
+                            <Flag countryCode={hut.country_code} size={14} />
+                            <span className="calendar-day-hut-name">{hut.name}</span>
+                          </div>
+                          
+                          {(hut.via || hut.via_hut) && !hut.isRestDay && (
+                            <div className="calendar-day-via">via {hut.via || hut.via_hut?.name || hut.via_hut}</div>
+                          )}
+                        </div>
+
+                        {index > 0 && (
+                          <button
+                            className="calendar-day-delete"
+                            onClick={() => handleRemoveDay(index)}
+                            title="Retirer cette étape"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Segment de marche */}
+                      {showSegment && (
+                        <div className="calendar-segment">
+                          <div className="calendar-segment-line"></div>
+                          <div className="calendar-segment-stats">
+                            <span className="calendar-segment-distance">{(nextHut.total_distance || 0).toFixed(1)} km</span>
+                            <span className="calendar-segment-elevation">↑{Math.round(nextHut.elevation_gain || 0)}</span>
+                            <span className="calendar-segment-elevation">↓{Math.round(nextHut.elevation_loss || 0)}</span>
+                            {nextHut.segments > 1 && (
+                              <span className="calendar-segment-warning">⚡ {nextHut.segments} seg.</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {/* Date de fin */}
+              {selectedHuts.length > 1 && (
+                <div className="expedition-footer">
+                  Arrivée le {formatDateFull(formatDate(startDate, selectedHuts.length - 1))}
+                </div>
+              )}
+
+              {/* Bouton réinitialiser */}
+              <button
+                className="btn btn-outline btn-danger btn-sm w-full mt-4"
+                onClick={resetRoute}
+              >
+                Réinitialiser
+              </button>
             </>
           )}
-        </section>
+        </div>
       </div>
 
-      {/* Colonne droite : carte agrandie */}
-      <div style={{ flex: '0 0 840px', maxWidth: '840px' }}>
-        <RouteMap
-          days={days}
+      {/* COLONNE DROITE */}
+      <div className="route-builder-right">
+        <RouteMap 
+          selectedHuts={selectedHuts} 
           reachableHuts={reachableHuts}
-          onSelectReachableHut={handleAddStageFromCandidate}
-          hoveredReachableHutId={hoveredReachableHutId}
-          setHoveredReachableHutId={setHoveredReachableHutId}
+          hoveredHutId={hoveredHutId}
+          onHutHover={setHoveredHutId}
+          onHutClick={handleAddHut}
         />
       </div>
     </div>

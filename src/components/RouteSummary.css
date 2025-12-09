@@ -1,0 +1,149 @@
+
+/* src/components/RouteSummary.css */
+
+.route-summary {
+  border: 2px solid var(--color-primary);
+}
+
+/* Stats grid */
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.summary-stat {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius);
+}
+
+.summary-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: white;
+  color: var(--color-primary);
+}
+
+.summary-stat-icon.success {
+  color: var(--color-success);
+}
+
+.summary-stat-icon.error {
+  color: var(--color-error);
+}
+
+.summary-stat-content {
+  flex: 1;
+}
+
+.summary-stat-label {
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summary-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* Itinerary list */
+.itinerary-list {
+  margin-bottom: var(--spacing-lg);
+}
+
+.itinerary-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--spacing-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.itinerary-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-bg-secondary);
+  margin-bottom: var(--spacing-xs);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.itinerary-day {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  width: 28px;
+  text-align: center;
+}
+
+.itinerary-hut {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.itinerary-hut-name {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.itinerary-hut-country {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-light);
+  text-transform: uppercase;
+}
+
+/* Average */
+.summary-avg {
+  padding: var(--spacing-md);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius);
+  text-align: center;
+  margin-bottom: var(--spacing-md);
+}
+
+/* Actions */
+.summary-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.summary-actions .btn {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .summary-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-actions {
+    flex-direction: column;
+  }
+
+  .summary-actions .btn {
+    width: 100%;
+  }
+}

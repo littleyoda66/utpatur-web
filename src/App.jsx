@@ -1,95 +1,135 @@
 // src/App.jsx
-import React, { useState } from 'react';
-import { RouteBuilderPanel } from './components/RouteBuilderPanel.jsx';
-import { AdminAddLinkPanel } from './components/AdminAddLinkPanel.jsx';
+import React, { useState, useEffect } from 'react';
+import { RouteBuilderPanel } from './components/RouteBuilderPanel';
+import { AdminPanel } from './components/AdminPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { config } from './config';
+import { checkHealth } from './services/api';
+import './App.css';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('route');
-  const env = import.meta.env.VITE_ENV;
-  const isStaging = env === 'staging';
+  const [apiStatus, setApiStatus] = useState(null);
+  const [isCheckingApi, setIsCheckingApi] = useState(true);
 
-
-  const tabButtonStyle = (isActive) => ({
-    borderRadius: '999px',
-    border: '1px solid #d1d5db',
-    padding: '0.35rem 0.9rem',
-    fontSize: '0.85rem',
-    fontWeight: 500,
-    cursor: 'pointer',
-    background: isActive ? '#2563eb' : '#f9fafb',
-    color: isActive ? '#ffffff' : '#374151',
-  });
+  // Vérifier l'état de l'API au démarrage
+  useEffect(() => {
+    const verifyApi = async (showLoading = false) => {
+      if (showLoading) setIsCheckingApi(true);
+      const health = await checkHealth();
+      setApiStatus(health);
+      if (showLoading) setIsCheckingApi(false);
+    };
     
+    // Premier appel avec loading
+    verifyApi(true);
+    
+    // Vérifications périodiques silencieuses (toutes les 2 minutes)
+    const interval = setInterval(() => verifyApi(false), 120000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isStaging = config.env === 'staging';
+  const isDev = config.isDevelopment;
+
   return (
-    <div
-      className="app"
-      style={{
-        padding: '1.5rem',
-        fontFamily:
-          'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      }}
-    >
-	      {isStaging && (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '0.25rem 0.5rem',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            borderRadius: '999px',
-            backgroundColor: '#f97316',
-            color: '#111827',
-            display: 'inline-block',
-            marginBottom: '0.75rem',
-          }}
-        >
-          Environnement de test (staging)
-        </div>
-      )}
+    <ErrorBoundary>
+      <div className="app">
+        {/* Header avec badges d'environnement */}
+        <header className="app-header">
+          <div className="header-content">
+            <div className="header-left">
+              <h1 className="app-title">Ut På Tur</h1>
+              
+              {/* Badges environnement */}
+              <div className="badges">
+                {isStaging && (
+                  <span className="badge badge-warning">
+                    Staging
+                  </span>
+                )}
+                {isDev && (
+                  <span className="badge badge-info">
+                    Dev
+                  </span>
+                )}
+                {apiStatus && (
+                  <span 
+                    className={`badge ${
+                      apiStatus.neo4j_connected 
+                        ? 'badge-success' 
+                        : 'badge-error'
+                    }`}
+                  >
+                    API {apiStatus.status}
+                  </span>
+                )}
+              </div>
+            </div>
 
-	
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          marginBottom: '1rem',
-        }}
-      >
-        <h1
-          style={{
-            fontSize: '1.4rem',
-            fontWeight: 600,
-            marginRight: '0.5rem',
-          }}
-        >
-          Ut På Tur
-        </h1>
+            {/* Tabs navigation */}
+            <nav className="tabs">
+             <button
+			  type="button"
+			  onClick={() => setActiveTab('route')}
+			  className={`tab ${activeTab === 'route' ? 'tab-active' : ''}`}
+			>
+			  Planifier un itinéraire
+			</button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('route')}
-          style={tabButtonStyle(activeTab === 'route')}
-        >
-          Planifier un itinéraire
-        </button>
+			<button
+			  type="button"
+			  onClick={() => setActiveTab('admin')}
+			  className={`tab ${activeTab === 'admin' ? 'tab-active' : ''}`}
+			>
+			  Admin
+			</button>
+            </nav>
+          </div>
+        </header>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab('admin')}
-          style={tabButtonStyle(activeTab === 'admin')}
-        >
-          Admin
-        </button>
-      </header>
+        {/* Main content */}
+        <main className="app-main">
+          {isCheckingApi ? (
+            <div className="loading-container">
+              <div className="spinner" />
+              <p>Connexion à l'API...</p>
+            </div>
+          ) : !apiStatus ? (
+            <div className="error-container">
+              <p className="error-message">
+                ⚠️ Impossible de se connecter à l'API
+              </p>
+              <p className="error-details">
+                Vérifiez que le backend est démarré sur {config.apiUrl}
+              </p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="btn btn-primary"
+              >
+                Réessayer
+              </button>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'route' && <RouteBuilderPanel />}
+              {activeTab === 'admin' && <AdminPanel />}
+            </>
+          )}
+        </main>
 
-      {activeTab === 'route' ? (
-        <RouteBuilderPanel />
-      ) : (
-        <AdminAddLinkPanel />
-      )}
-    </div>
+        {/* Footer */}
+        <footer className="app-footer">
+          <p>
+            UtPaTur v{config.apiVersion} - Planification de raids en Laponie
+            {config.debug && (
+              <span className="debug-info">
+                {' '}| API: {config.apiUrl}
+              </span>
+            )}
+          </p>
+        </footer>
+      </div>
+    </ErrorBoundary>
   );
 }

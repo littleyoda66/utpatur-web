@@ -1,0 +1,118 @@
+/* src/components/ReachableHutsList.css */
+
+.reachable-huts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reachable-hut-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.reachable-hut-card:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Style quand survolé depuis la carte */
+.reachable-hut-card--hovered {
+  background-color: #fffbeb;
+  border-color: #f59e0b;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+}
+
+.reachable-hut-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.reachable-hut-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reachable-hut-flag {
+  flex-shrink: 0;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.reachable-hut-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.reachable-hut-stats span {
+  white-space: nowrap;
+}
+
+.segments-badge {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.reachable-hut-via {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* Icône + discrète */
+.add-hut-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #d1d5db;
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: all 0.15s ease;
+}
+
+.reachable-hut-card:hover .add-hut-icon {
+  color: #f59e0b;
+}
+
+.reachable-hut-card--hovered .add-hut-icon {
+  color: #f59e0b;
+}
+
+/* Scrollbar styling */
+.reachable-huts-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.reachable-huts-list::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+.reachable-huts-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.reachable-huts-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
