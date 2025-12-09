@@ -3,14 +3,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StageCard } from './StageCard';
 import { getHuts, getReachableHuts } from '../api/utpaturApi';
 import { formatNumber } from '../utils/formatNumber';
-import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, Tooltip, Popup, LayersControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { RouteMap } from './RouteMap';
+import { getCountryFlag } from '../utils/getCountryFlag';
 
-const { BaseLayer } = LayersControl;
-
-// Icônes Leaflet
+// Icônes Leaflet globales
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
@@ -19,24 +17,10 @@ L.Icon.Default.mergeOptions({
     'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-icon-orange.png',
   shadowUrl:
     'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-shadow.png',
-  iconSize: [18, 29],  // tes tailles actuelles
+  iconSize: [18, 29],
   iconAnchor: [9, 29],
   popupAnchor: [1, -24],
   shadowSize: [30, 30],
-});
-
-// Marqueurs encore plus petits / discrets pour les cabanes atteignables
-const reachableIcon = new L.Icon({
-  iconRetinaUrl:
-    'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-icon-2x-orange.png',
-  iconUrl:
-    'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-icon-orange.png',
-  shadowUrl:
-    'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@1.0.0/img/marker-shadow.png',
-  iconSize: [12, 20],
-  iconAnchor: [6, 20],
-  popupAnchor: [0, -18],
-  shadowSize: [20, 20],
 });
 
 // Un "jour" de l'itinéraire
@@ -49,27 +33,6 @@ function createDay({ dayIndex, hut, isRest, segmentFromPrevious }) {
     segmentFromPrevious: segmentFromPrevious || null,
   };
 }
-
-// Ajuste le zoom de la carte sur l’ensemble de l’itinéraire
-function FitBoundsOnRoute({ positions }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!positions || positions.length === 0) return;
-
-    if (positions.length === 1) {
-      map.setView(positions[0], 9);
-      return;
-    }
-
-    const bounds = L.latLngBounds(positions);
-    map.fitBounds(bounds, { padding: [40, 40] });
-  }, [map, positions]);
-
-  return null;
-}
-
-
 
 export function RouteBuilderPanel() {
   const [allHuts, setAllHuts] = useState([]);
@@ -86,7 +49,6 @@ export function RouteBuilderPanel() {
   const [hoveredReachableHutId, setHoveredReachableHutId] = useState(null);
 
   const [startSearch, setStartSearch] = useState('');
-  
 
   // Charger toutes les cabanes pour la cabane de départ
   useEffect(() => {
@@ -97,13 +59,14 @@ export function RouteBuilderPanel() {
       try {
         const huts = await getHuts();
         if (!cancelled) {
-          setAllHuts(huts);
+          setAllHuts(huts || []);
         }
       } catch (err) {
         console.error(err);
         if (!cancelled) {
           setHutsError(
-            err.message || 'Erreur lors du chargement de la liste des cabanes.',
+            err?.message ||
+              'Erreur lors du chargement de la liste des cabanes.',
           );
         }
       } finally {
@@ -142,14 +105,29 @@ export function RouteBuilderPanel() {
           maxDistance,
           maxSegments,
         );
+
         if (!cancelled) {
-          setReachableHuts(reachable || []);
+          const list = Array.isArray(reachable) ? reachable : [];
+
+          const enriched = list.map((c) => {
+            const baseHut = allHuts.find((h) => h.hut_id === c.hut_id);
+            if (!baseHut) return c;
+            return {
+              ...c,
+              latitude: c.latitude ?? baseHut.latitude,
+              longitude: c.longitude ?? baseHut.longitude,
+              country_code: c.country_code ?? baseHut.country_code,
+            };
+          });
+
+          setReachableHuts(enriched);
         }
       } catch (err) {
         console.error(err);
         if (!cancelled) {
           setReachableError(
-            err.message || 'Erreur lors du calcul des cabanes atteignables.',
+            err?.message ||
+              'Erreur lors du calcul des cabanes atteignables.',
           );
         }
       } finally {
@@ -161,14 +139,15 @@ export function RouteBuilderPanel() {
     return () => {
       cancelled = true;
     };
-  }, [lastHut?.hut_id, maxDistance, allowTwoSegments]);
+  }, [lastHut?.hut_id, maxDistance, allowTwoSegments, allHuts]);
 
   // Résumé de l’itinéraire
   const totalDistanceKm = useMemo(
     () =>
       days.reduce(
         (sum, d) =>
-          sum + (d.segmentFromPrevious ? d.segmentFromPrevious.distanceKm || 0 : 0),
+          sum +
+          (d.segmentFromPrevious ? d.segmentFromPrevious.distanceKm || 0 : 0),
         0,
       ),
     [days],
@@ -178,7 +157,8 @@ export function RouteBuilderPanel() {
     () =>
       days.reduce(
         (sum, d) =>
-          sum + (d.segmentFromPrevious ? d.segmentFromPrevious.dplusM || 0 : 0),
+          sum +
+          (d.segmentFromPrevious ? d.segmentFromPrevious.dplusM || 0 : 0),
         0,
       ),
     [days],
@@ -188,7 +168,8 @@ export function RouteBuilderPanel() {
     () =>
       days.reduce(
         (sum, d) =>
-          sum + (d.segmentFromPrevious ? d.segmentFromPrevious.dminusM || 0 : 0),
+          sum +
+          (d.segmentFromPrevious ? d.segmentFromPrevious.dminusM || 0 : 0),
         0,
       ),
     [days],
@@ -208,7 +189,7 @@ export function RouteBuilderPanel() {
   const handleResetRoute = () => {
     if (
       !window.confirm(
-        "Supprimer tout l’itinéraire et revenir au choix de la cabane de départ ?",
+        'Supprimer tout l’itinéraire et revenir au choix de la cabane de départ ?',
       )
     ) {
       return;
@@ -228,38 +209,40 @@ export function RouteBuilderPanel() {
     setDays((prev) => [...prev, newDay]);
   };
 
- const handleAddStageFromCandidate = (candidate) => {
-  if (!lastDay) return;
+  const handleAddStageFromCandidate = (candidate) => {
+    if (!lastDay) return;
 
-  let viaHut = null;
-  if (
-    (candidate.segments === 2 || candidate.segments === '2') &&
-    candidate.via
-  ) {
-    viaHut =
-      allHuts.find((h) => h.name === candidate.via) || null;
-  }
+    let viaHut = null;
+    if (
+      (candidate.segments === 2 || candidate.segments === '2') &&
+      candidate.via
+    ) {
+      viaHut =
+        allHuts.find((h) => h.name === candidate.via) || null;
+    }
 
     const segment = {
-    distanceKm: candidate.distance_km ?? candidate.total_distance_km ?? 0,
-    dplusM: candidate.dplus_m ?? candidate.total_dplus_m ?? 0,
-    dminusM: candidate.dminus_m ?? candidate.total_dminus_m ?? 0,
-    segments: candidate.segments ?? null,
-    via: candidate.via ?? null,
-    steps: candidate.steps || [], // 👈 nouvelle propriété : détail des segments ORS
-    viaHut, // 👈 cabane intermédiaire avec latitude / longitude
+      distanceKm: candidate.distance_km ?? candidate.total_distance_km ?? 0,
+      dplusM: candidate.dplus_m ?? candidate.total_dplus_m ?? 0,
+      dminusM: candidate.dminus_m ?? candidate.total_dminus_m ?? 0,
+      segments: candidate.segments ?? null,
+      via: candidate.via ?? null,
+      steps: candidate.steps || [], // détail des segments ORS
+      viaHut, // cabane intermédiaire avec latitude / longitude
+    };
+
+    const toHut =
+      allHuts.find((h) => h.hut_id === candidate.hut_id) || candidate;
+
+    const newDay = createDay({
+      dayIndex: lastDay.dayIndex + 1,
+      hut: toHut,
+      isRest: false,
+      segmentFromPrevious: segment,
+    });
+
+    setDays((prev) => [...prev, newDay]);
   };
-
-
-  const newDay = createDay({
-    dayIndex: lastDay.dayIndex + 1,
-    hut: candidate,
-    isRest: false,
-    segmentFromPrevious: segment,
-  });
-
-  setDays((prev) => [...prev, newDay]);
-};
 
   const handleTruncateFromDayIndex = (startIndex) => {
     const day = days[startIndex];
@@ -340,11 +323,28 @@ export function RouteBuilderPanel() {
                   ) : (
                     <>
                       <span>
-                        {formatNumber(day.segmentFromPrevious.distanceKm, 1)} km
+                        {formatNumber(
+                          day.segmentFromPrevious.distanceKm,
+                          1,
+                        )}{' '}
+                        km
                       </span>
-                      <span>+{formatNumber(day.segmentFromPrevious.dplusM, 0)} m</span>
-                      <span>-{formatNumber(day.segmentFromPrevious.dminusM, 0)} m</span>
-					  
+                      <span>
+                        +
+                        {formatNumber(
+                          day.segmentFromPrevious.dplusM,
+                          0,
+                        )}{' '}
+                        m
+                      </span>
+                      <span>
+                        -
+                        {formatNumber(
+                          day.segmentFromPrevious.dminusM,
+                          0,
+                        )}{' '}
+                        m
+                      </span>
                     </>
                   )}
                 </div>
@@ -387,47 +387,46 @@ export function RouteBuilderPanel() {
                   flexShrink: 0,
                 }}
               />
-            <div
-			  style={{
-				flex: 1,
-				padding: '0.25rem 0.5rem',
-				borderRadius: '0.5rem',
-				background: day.isRest ? '#f3f4f6' : '#ffffff',
-				border: '1px solid #e5e7eb',
-			  }}
-			>
-			  <div
-				style={{
-				  fontSize: '0.75rem',
-				  color: '#6b7280',
-				  marginBottom: '0.1rem',
-				}}
-			  >
-				Jour {day.dayIndex}
-				{day.isRest && ' · repos'}
-			  </div>
+              <div
+                style={{
+                  flex: 1,
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '0.5rem',
+                  background: day.isRest ? '#f3f4f6' : '#ffffff',
+                  border: '1px solid #e5e7eb',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.75rem',
+                    color: '#6b7280',
+                    marginBottom: '0.1rem',
+                  }}
+                >
+                  Jour {day.dayIndex}
+                  {day.isRest && ' · repos'}
+                </div>
 
-			  <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>
-				{day.hut.name}
-			  </div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>
+                  {day.hut.name}
+                </div>
 
-			  {index > 0 &&
-				day.segmentFromPrevious &&
-				day.segmentFromPrevious.segments === 2 &&
-				day.segmentFromPrevious.via && (
-				  <div
-					style={{
-					  fontSize: '0.75rem',
-					  color: '#6b7280',
-					  fontStyle: 'italic',
-					  marginTop: '0.05rem',
-					}}
-				  >
-					via {day.segmentFromPrevious.via}
-				  </div>
-				)}
-</div>
-
+                {index > 0 &&
+                  day.segmentFromPrevious &&
+                  day.segmentFromPrevious.segments === 2 &&
+                  day.segmentFromPrevious.via && (
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        color: '#6b7280',
+                        fontStyle: 'italic',
+                        marginTop: '0.05rem',
+                      }}
+                    >
+                      via {day.segmentFromPrevious.via}
+                    </div>
+                  )}
+              </div>
 
               {index === 0 && days.length > 0 && (
                 <button
@@ -527,31 +526,44 @@ export function RouteBuilderPanel() {
                     Aucune cabane ne correspond à cette recherche.
                   </div>
                 ) : (
-                  filteredStartHuts.map((hut) => (
-                    <button
-                      key={hut.hut_id}
-                      type="button"
-                      onClick={() => handleSelectStartHut(hut)}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '0.3rem 0.4rem',
-                        fontSize: '0.8rem',
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {hut.name}
-                      {hut.country_code && (
-                        <span style={{ color: '#9ca3af' }}>
-                          {' '}
-                          · {hut.country_code}
-                        </span>
-                      )}
-                    </button>
-                  ))
+                  filteredStartHuts.map((hut) => {
+                    const flag = getCountryFlag(hut.country_code);
+
+                    return (
+                      <button
+                        key={hut.hut_id}
+                        type="button"
+                        onClick={() => handleSelectStartHut(hut)}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '0.3rem 0.4rem',
+                          fontSize: '0.8rem',
+                          border: 'none',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {flag && (
+                          <span style={{ marginRight: '0.35rem' }}>
+                            {flag}
+                          </span>
+                        )}
+                        {hut.name}
+                        {hut.country_code && (
+                          <span
+                            style={{
+                              color: '#9ca3af',
+                              marginLeft: '0.25rem',
+                            }}
+                          >
+                            ({hut.country_code})
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -635,9 +647,7 @@ export function RouteBuilderPanel() {
                     checked={allowTwoSegments}
                     onChange={(e) => setAllowTwoSegments(e.target.checked)}
                   />
-                  <span>
-                    Autoriser jusqu&apos;à 2 segments
-                  </span>
+                  <span>Autoriser jusqu&apos;à 2 segments</span>
                 </label>
 
                 <div>
@@ -664,7 +674,7 @@ export function RouteBuilderPanel() {
               style={{
                 borderRadius: '0.75rem',
                 border: '1px solid #e5e7eb',
-                padding: '0rem 1rem',
+                padding: '0rem 1rem 0.75rem',
                 background: '#ffffff',
               }}
             >
@@ -674,7 +684,6 @@ export function RouteBuilderPanel() {
                   {lastHut ? lastHut.name : '…'}
                 </span>
               </h3>
-              
 
               {isLoadingReachable ? (
                 <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
@@ -691,26 +700,36 @@ export function RouteBuilderPanel() {
               ) : (
                 <div>
                   {reachableHuts.map((candidate) => (
-				  <StageCard
-					key={candidate.hut_id}
-					//label="Destination"
-					toName={candidate.name}
-					via={candidate.segments === 2 && candidate.via ? candidate.via : null}
-					distanceKm={
-					  candidate.distance_km ?? candidate.total_distance_km
-					}
-					dplusM={candidate.dplus_m ?? candidate.total_dplus_m}
-					dminusM={candidate.dminus_m ?? candidate.total_dminus_m}
-					isCandidate
-					isActive={hoveredReachableHutId === candidate.hut_id}
-					onAdd={() => handleAddStageFromCandidate(candidate)}
-					// 👇 AJOUTS pour le hover
-					hutId={candidate.hut_id}
-					onHoverStart={setHoveredReachableHutId}
-					onHoverEnd={() => setHoveredReachableHutId(null)}
-				  />
-				))}
-
+                    <StageCard
+                      key={candidate.hut_id}
+                      toName={candidate.name}
+                      via={
+                        candidate.segments === 2 && candidate.via
+                          ? candidate.via
+                          : null
+                      }
+                      distanceKm={
+                        candidate.distance_km ?? candidate.total_distance_km
+                      }
+                      dplusM={candidate.dplus_m ?? candidate.total_dplus_m}
+                      dminusM={
+                        candidate.dminus_m ?? candidate.total_dminus_m
+                      }
+                      isCandidate
+                      isActive={
+                        hoveredReachableHutId === candidate.hut_id
+                      }
+                      onAdd={() =>
+                        handleAddStageFromCandidate(candidate)
+                      }
+                      hutId={candidate.hut_id}
+                      onHoverStart={setHoveredReachableHutId}
+                      onHoverEnd={() =>
+                        setHoveredReachableHutId(null)
+                      }
+                      countryCode={candidate.country_code}
+                    />
+                  ))}
                 </div>
               )}
             </section>
@@ -750,7 +769,9 @@ export function RouteBuilderPanel() {
               >
                 <div>
                   <div style={{ color: '#6b7280' }}>Jours</div>
-                  <div style={{ fontWeight: 600 }}>{totalDaysDisplay}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    {totalDaysDisplay}
+                  </div>
                 </div>
                 <div>
                   <div style={{ color: '#6b7280' }}>Distance</div>
@@ -780,14 +801,13 @@ export function RouteBuilderPanel() {
 
       {/* Colonne droite : carte agrandie */}
       <div style={{ flex: '0 0 840px', maxWidth: '840px' }}>
-	   <RouteMap
-		  days={days}
-		  reachableHuts={reachableHuts}
-		  onSelectReachableHut={handleAddStageFromCandidate}
-		  hoveredReachableHutId={hoveredReachableHutId} 
-		  setHoveredReachableHutId={setHoveredReachableHutId}
-		/>
-
+        <RouteMap
+          days={days}
+          reachableHuts={reachableHuts}
+          onSelectReachableHut={handleAddStageFromCandidate}
+          hoveredReachableHutId={hoveredReachableHutId}
+          setHoveredReachableHutId={setHoveredReachableHutId}
+        />
       </div>
     </div>
   );

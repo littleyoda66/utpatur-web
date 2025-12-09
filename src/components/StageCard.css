@@ -147,4 +147,8 @@
   color: #1d4ed8;      /* un peu plus marqué au hover */
 }
 
+.stage-card__flag {
+  font-size: 0.9rem;
+  margin-right: 0.25rem;
+}
 

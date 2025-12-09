@@ -2,6 +2,8 @@
 import React from 'react';
 import './StageCard.css';
 import { formatNumber } from '../utils/formatNumber';
+import { getCountryFlag } from '../utils/getCountryFlag';
+
 
 export function StageCard({
   label,
@@ -20,6 +22,7 @@ export function StageCard({
   hutId,
   onHoverStart,
   onHoverEnd,
+  countryCode
 }) {
   const classNames = [
     'stage-card',
@@ -33,6 +36,8 @@ export function StageCard({
   const hasDistance = distanceKm !== null && distanceKm !== undefined;
   const hasDplus = dplusM !== null && dplusM !== undefined;
   const hasDminus = dminusM !== null && dminusM !== undefined;
+  const flag = getCountryFlag(countryCode);
+
 
   const isClickableCard = isCandidate && typeof onAdd === 'function';
 
@@ -85,7 +90,8 @@ export function StageCard({
               )}
               <div className="stage-card__route-main">
                 <span className="stage-card__arrow">→</span>
-                <span
+                {flag && <span className="stage-card__flag">{flag}</span>}
+				<span
                   className={
                     isRest
                       ? 'stage-card__hut stage-card__hut--rest'
@@ -102,7 +108,8 @@ export function StageCard({
                 <span className="stage-card__hut">{fromName}</span>
               )}
               {fromName && <span className="stage-card__arrow">→</span>}
-              <span
+              {flag && <span className="stage-card__flag">{flag}</span>}
+			  <span
                 className={
                   isRest
                     ? 'stage-card__hut stage-card__hut--rest'
