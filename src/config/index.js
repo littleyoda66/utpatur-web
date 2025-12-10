@@ -56,3 +56,5 @@ export const getAuthHeaders = () => ({
   'Content-Type': 'application/json',
   ...(config.adminToken && { Authorization: `Bearer ${config.adminToken}` })
 });
+
+

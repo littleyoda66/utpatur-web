@@ -76,7 +76,7 @@
 /* Marqueurs des cabanes */
 .elevation-marker {
   position: absolute;
-  transform: translateX(-50%) translateY(30%);
+  transform: translateX(-50%) translateY(16%);
   z-index: 20;
   cursor: pointer;
 }
@@ -99,10 +99,10 @@
   top: 100%;
   left: 50%;
   width: 1px;
-  height: 200px;
-  background: linear-gradient(to bottom, #3b82f6, transparent);
+  background: rgba(59, 130, 246, 0.5);
   transform: translateX(-50%);
   pointer-events: none;
+  /* La hauteur sera définie inline */
 }
 
 /* Tooltip élégant - effet verre (glassmorphism) */
@@ -213,12 +213,7 @@
 }
 
 /* Ligne vers le bas pour les cabanes hautes */
-.elevation-marker-line.line-below {
-  top: 100%;
-  bottom: auto;
-  height: 200px;
-  background: linear-gradient(to top, #3b82f6, transparent);
-}
+/* Style line-below supprimé - la hauteur est maintenant calculée dynamiquement */
 
 /* Axe X (horizontal) */
 .elevation-axis-x {
@@ -252,9 +247,9 @@
   top: 100%;
   left: 50%;
   width: 1px;
-  height: 150px;
-  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.5), transparent);
+  background: rgba(59, 130, 246, 0.5);
   transform: translateX(-50%);
+  /* La hauteur est définie inline */
 }
 
 .elevation-cursor-tooltip {
@@ -284,4 +279,42 @@
   .elevation-axis-y {
     min-width: 30px;
   }
+}
+
+/* Marqueurs des cabanes "via" (points intermédiaires) */
+.elevation-via-marker {
+  position: absolute;
+  transform: translateX(-50%) translateY(50%);
+  z-index: 15;
+  cursor: pointer;
+}
+
+.elevation-via-dot {
+  width: 8px;
+  height: 8px;
+  background: #64748b;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.elevation-via-marker:hover .elevation-via-dot,
+.elevation-via-marker-hovered .elevation-via-dot {
+  background: #f59e0b;
+  transform: scale(1.4);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+}
+
+.elevation-tooltip-via {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.elevation-tooltip-via .via-label {
+  font-size: 9px;
+  font-weight: 400;
+  color: #94a3b8;
+  text-transform: lowercase;
 }

@@ -1,5 +1,5 @@
 // src/components/ElevationProfile.jsx
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import './ElevationProfile.css';
 
 // Icône SVG de cabane - V4 trait fin avec cheminée
@@ -102,7 +102,15 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const chartRef = useRef(null);
   
-  const chartHeight = 100;
+  const chartHeight = 100; // Hauteur du viewBox SVG
+  const chartHeightPx = 90; // Hauteur CSS du conteneur en pixels
+
+  // Réinitialiser l'état au changement de route
+  useEffect(() => {
+    setHoveredPoint(null);
+    if (onHutHover) onHutHover(null);
+    if (onPositionHover) onPositionHover(null);
+  }, [selectedHuts]);
 
   // Construire les données du profil
   const profileData = useMemo(() => {
@@ -123,8 +131,11 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
         const steps = hut.steps || [];
         let segmentHasAltitude = false;
         
-        // Essayer d'extraire les altitudes des polylines
-        for (const step of steps) {
+        // Traiter chaque step individuellement
+        for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
+          const step = steps[stepIndex];
+          const isLastStep = stepIndex === steps.length - 1;
+          
           if (step.geometry_polyline) {
             const coords = decodePolyline(step.geometry_polyline);
             
@@ -154,13 +165,39 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
                     altitude: coord.alt / 100, // Convertir en mètres
                     lat: coord.lat,
                     lng: coord.lng,
-                    isHut: false
+                    isHut: false,
+                    isVia: false
                   });
+                }
+                
+                // Si ce n'est pas le dernier step, marquer le point de jonction comme cabane "via"
+                if (!isLastStep && coords.length > 0) {
+                  const lastPoint = allPoints[allPoints.length - 1];
+                  if (lastPoint) {
+                    lastPoint.isVia = true;
+                    lastPoint.viaName = hut.via || `Via ${stepIndex + 1}`;
+                    lastPoint.viaHutId = step.to_hut_id;
+                  }
                 }
               } else {
                 // Pas d'altitude valide, juste accumuler la distance et les coords
                 for (let j = 1; j < coords.length; j++) {
                   cumulativeDistance += getDistance(coords[j-1], coords[j]);
+                }
+                
+                // Ajouter quand même un point via à la fin du step si multi-segments
+                if (!isLastStep) {
+                  const lastCoord = coords[coords.length - 1];
+                  allPoints.push({
+                    distance: cumulativeDistance,
+                    altitude: 500, // Fallback
+                    lat: lastCoord?.lat,
+                    lng: lastCoord?.lng,
+                    isHut: false,
+                    isVia: true,
+                    viaName: hut.via || `Via ${stepIndex + 1}`,
+                    viaHutId: step.to_hut_id
+                  });
                 }
               }
             }
@@ -230,37 +267,49 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
               }
             }
           }
-        } else if (allPoints.length > 0) {
-          hutAlt = allPoints[allPoints.length - 1].altitude;
+        }
+        
+        // Sinon utiliser le dernier point ou 500m par défaut
+        if (!hutAlt || hutAlt <= 0) {
+          hutAlt = allPoints.length > 0 ? allPoints[allPoints.length-1].altitude : 500;
         }
       }
       
-      // Fallback final
-      if (!hutAlt || hutAlt <= 0) {
-        hutAlt = 500;
+      // Corriger la distance pour la première cabane
+      if (isFirstHut) {
+        allPoints.push({
+          distance: 0,
+          altitude: hutAlt,
+          lat: hut.latitude || hut.lat,
+          lng: hut.longitude || hut.lng || hut.lon,
+          name: hut.name,
+          hutId: hut.hut_id || hut.id,
+          isHut: true,
+          index: i
+        });
+      } else {
+        allPoints.push({
+          distance: cumulativeDistance,
+          altitude: hutAlt,
+          lat: hut.latitude || hut.lat,
+          lng: hut.longitude || hut.lng || hut.lon,
+          name: hut.name,
+          hutId: hut.hut_id || hut.id,
+          isHut: true,
+          index: i
+        });
       }
-
-      allPoints.push({
-        distance: cumulativeDistance,
-        altitude: hutAlt,
-        lat: hut.latitude,
-        lng: hut.longitude,
-        isHut: true,
-        name: hut.name,
-        hutId: hut.id
-      });
     }
 
-    // Nettoyer les NaN et valeurs invalides
-    return allPoints.filter(p => 
-      !isNaN(p.distance) && 
-      !isNaN(p.altitude) && 
-      p.altitude > 0 && 
-      p.altitude < 3000
-    );
+    // Filtrer les points avec altitude invalide et trier par distance
+    const validPoints = allPoints
+      .filter(p => p.altitude > 0 && p.altitude < 5000)
+      .sort((a, b) => a.distance - b.distance);
+
+    return validPoints.length >= 2 ? validPoints : null;
   }, [selectedHuts]);
 
-  // Calcul des données du graphique
+  // Calculer les échelles
   const chartData = useMemo(() => {
     if (!profileData || profileData.length < 2) return null;
 
@@ -286,13 +335,14 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
     return {
       points: profileData,
       hutPoints: profileData.filter(p => p.isHut),
+      viaPoints: profileData.filter(p => p.isVia),
       yMin, yMax, yRange, xMax: maxDist, yTicks
     };
   }, [profileData]);
 
   if (!chartData) return null;
 
-  const { points, hutPoints, yMin, yRange, xMax, yTicks } = chartData;
+  const { points, hutPoints, viaPoints, yMin, yRange, xMax, yTicks } = chartData;
   
   // Générer le path SVG (lignes droites entre chaque point)
   const generatePath = () => {
@@ -312,8 +362,9 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
 
   const handleMarkerHover = (point) => {
     setHoveredPoint(point);
-    if (point && point.isHut) {
-      if (onHutHover) onHutHover(point.hutId);
+    if (point && (point.isHut || point.isVia)) {
+      const hutId = point.hutId || point.viaHutId;
+      if (onHutHover && hutId) onHutHover(hutId);
       if (onPositionHover && point.lat && point.lng) {
         onPositionHover({ lat: point.lat, lng: point.lng });
       }
@@ -432,6 +483,8 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
             const isFirst = i === 0;
             const isLast = i === hutPoints.length - 1;
             const isHigh = y > 70; // Si au-dessus de 70%, tooltip en dessous
+            // Hauteur du trait : y% de la hauteur du conteneur, ajusté pour le transform
+            const lineHeight = Math.max(0, (y / 100) * chartHeightPx - 5);
             
             return (
               <div
@@ -453,7 +506,10 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
                 </div>
                 {isHovered && (
                   <>
-                    <div className={`elevation-marker-line ${isHigh ? 'line-below' : ''}`}></div>
+                    <div 
+                      className="elevation-marker-line"
+                      style={{ height: `${lineHeight}px` }}
+                    ></div>
                     <div 
                       className={`elevation-marker-tooltip ${isFirst ? 'tooltip-left' : ''} ${isLast ? 'tooltip-right' : ''} ${isHigh ? 'tooltip-below' : ''}`}
                     >
@@ -468,23 +524,77 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
               </div>
             );
           })}
+
+          {/* Marqueurs des cabanes "via" (points intermédiaires) */}
+          {viaPoints.map((p, i) => {
+            const x = (p.distance / xMax) * 100;
+            const y = ((p.altitude - yMin) / yRange) * 100;
+            const isHovered = hoveredPoint?.viaHutId === p.viaHutId && hoveredPoint?.isVia;
+            const isHigh = y > 70;
+            // Hauteur du trait : y% de la hauteur, moins la moitié du point (4px pour 8px)
+            const lineHeight = Math.max(0, (y / 100) * chartHeightPx - 4);
+            
+            return (
+              <div
+                key={`via-${i}`}
+                className={`elevation-via-marker ${isHovered ? 'elevation-via-marker-hovered' : ''}`}
+                style={{ left: `${x}%`, bottom: `${y}%` }}
+                onMouseEnter={(e) => {
+                  e.stopPropagation();
+                  setCursorPoint(null);
+                  handleMarkerHover(p);
+                }}
+                onMouseLeave={(e) => {
+                  e.stopPropagation();
+                  handleMarkerHover(null);
+                }}
+              >
+                <div className="elevation-via-dot"></div>
+                {isHovered && (
+                  <>
+                    <div 
+                      className="elevation-marker-line"
+                      style={{ height: `${lineHeight}px` }}
+                    ></div>
+                    <div className={`elevation-marker-tooltip ${isHigh ? 'tooltip-below' : ''}`}>
+                      <div className="elevation-tooltip-name elevation-tooltip-via">
+                        <span className="via-label">via</span> {p.viaName}
+                      </div>
+                      <div className="elevation-tooltip-data">
+                        <span className="tooltip-altitude">{formatNumber(p.altitude)} m</span>
+                        <span className="tooltip-distance">{p.distance.toFixed(1)} km</span>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
           
           {/* Indicateur de position survolée (pour les points non-cabane) */}
-          {cursorPoint && !cursorPoint.isHut && (
-            <div 
-              className="elevation-cursor"
-              style={{ 
-                left: `${(cursorPoint.distance / xMax) * 100}%`,
-                bottom: `${((cursorPoint.altitude - yMin) / yRange) * 100}%`
-              }}
-            >
-              <div className="elevation-cursor-dot"></div>
-              <div className="elevation-cursor-line"></div>
-              <div className="elevation-cursor-tooltip">
-                {formatNumber(cursorPoint.altitude)} m
+          {cursorPoint && !cursorPoint.isHut && (() => {
+            const cursorY = ((cursorPoint.altitude - yMin) / yRange) * 100;
+            // Hauteur du trait : y% de la hauteur, moins la moitié du point (3px pour 6px)
+            const lineHeight = Math.max(0, (cursorY / 100) * chartHeightPx - 3);
+            return (
+              <div 
+                className="elevation-cursor"
+                style={{ 
+                  left: `${(cursorPoint.distance / xMax) * 100}%`,
+                  bottom: `${cursorY}%`
+                }}
+              >
+                <div className="elevation-cursor-dot"></div>
+                <div 
+                  className="elevation-cursor-line"
+                  style={{ height: `${lineHeight}px` }}
+                ></div>
+                <div className="elevation-cursor-tooltip">
+                  {formatNumber(cursorPoint.altitude)} m
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
       
