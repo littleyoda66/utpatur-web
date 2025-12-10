@@ -2,40 +2,35 @@
 import React, { useMemo, useState, useRef } from 'react';
 import './ElevationProfile.css';
 
-// Icône SVG de cabane - esquisse minimale, symétrique
+// Icône SVG de cabane - V4 trait fin avec cheminée
+// Jointures carrées (square/miter), stroke adaptatif selon taille
 function CabinIcon({ size = 24, className = '' }) {
+  // Adapter le stroke selon la taille pour maintenir la lisibilité
+  const strokeWidth = size <= 16 ? 2.4 
+                    : size <= 20 ? 2.0 
+                    : size <= 24 ? 1.7 
+                    : 1.2;
+
   return (
     <svg 
       width={size} 
-      height={size * 0.55} 
-      viewBox="0 0 32 17" 
+      height={size} 
+      viewBox="0 0 24 24" 
       fill="none" 
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="square"
+      strokeLinejoin="miter"
       className={className}
     >
-      {/* Toit */}
-      <path 
-        d="M6 12L16 4L26 12" 
-        stroke="currentColor"
-        strokeWidth="0.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Murs et sol */}
-      <path 
-        d="M8 11V16H24V11" 
-        stroke="currentColor"
-        strokeWidth="0.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Porte */}
-      <path 
-        d="M14 16V12H18V16" 
-        stroke="currentColor"
-        strokeWidth="0.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {/* Toit asymétrique */}
+      <path d="M4 13L11 7L20 13" />
+      {/* Mur vertical à gauche */}
+      <path d="M7.5 11v7" />
+      {/* Base horizontale */}
+      <path d="M7.5 18h6" />
+      {/* Cheminée */}
+      <path d="M16 10V6.5" />
     </svg>
   );
 }
@@ -235,49 +230,37 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
               }
             }
           }
-        }
-        
-        // Sinon utiliser le dernier point ou 500m par défaut
-        if (!hutAlt || hutAlt <= 0) {
-          hutAlt = allPoints.length > 0 ? allPoints[allPoints.length-1].altitude : 500;
+        } else if (allPoints.length > 0) {
+          hutAlt = allPoints[allPoints.length - 1].altitude;
         }
       }
       
-      // Corriger la distance pour la première cabane
-      if (isFirstHut) {
-        allPoints.push({
-          distance: 0,
-          altitude: hutAlt,
-          lat: hut.latitude || hut.lat,
-          lng: hut.longitude || hut.lng || hut.lon,
-          name: hut.name,
-          hutId: hut.hut_id || hut.id,
-          isHut: true,
-          index: i
-        });
-      } else {
-        allPoints.push({
-          distance: cumulativeDistance,
-          altitude: hutAlt,
-          lat: hut.latitude || hut.lat,
-          lng: hut.longitude || hut.lng || hut.lon,
-          name: hut.name,
-          hutId: hut.hut_id || hut.id,
-          isHut: true,
-          index: i
-        });
+      // Fallback final
+      if (!hutAlt || hutAlt <= 0) {
+        hutAlt = 500;
       }
+
+      allPoints.push({
+        distance: cumulativeDistance,
+        altitude: hutAlt,
+        lat: hut.latitude,
+        lng: hut.longitude,
+        isHut: true,
+        name: hut.name,
+        hutId: hut.id
+      });
     }
 
-    // Filtrer les points avec altitude invalide et trier par distance
-    const validPoints = allPoints
-      .filter(p => p.altitude > 0 && p.altitude < 5000)
-      .sort((a, b) => a.distance - b.distance);
-
-    return validPoints.length >= 2 ? validPoints : null;
+    // Nettoyer les NaN et valeurs invalides
+    return allPoints.filter(p => 
+      !isNaN(p.distance) && 
+      !isNaN(p.altitude) && 
+      p.altitude > 0 && 
+      p.altitude < 3000
+    );
   }, [selectedHuts]);
 
-  // Calculer les échelles
+  // Calcul des données du graphique
   const chartData = useMemo(() => {
     if (!profileData || profileData.length < 2) return null;
 
@@ -466,7 +449,7 @@ export function ElevationProfile({ selectedHuts, onHutHover, onPositionHover }) 
                 }}
               >
               <div className="elevation-marker-cabin">
-                  <CabinIcon size={24} />
+                  <CabinIcon size={22} />
                 </div>
                 {isHovered && (
                   <>
