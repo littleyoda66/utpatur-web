@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouteStore } from '../store/routeStore';
 import { hutsApi } from '../services/api';
-import { HutSearch } from './HutSearch';
+import { StartPointSelector } from './StartPointSelector';
 import { ReachableHutsList } from './ReachableHutsList';
 import { RouteMap } from './RouteMap';
 import { Trash2, Bed, Compass, TrendingUp, TrendingDown } from 'lucide-react';
+import { ElevationProfile } from './ElevationProfile';
 import './RouteBuilderPanel.css';
 
 // Composant drapeau SVG compact
@@ -74,6 +75,7 @@ export function RouteBuilderPanel() {
   const [allHuts, setAllHuts] = useState([]);
   const [isLoadingHuts, setIsLoadingHuts] = useState(true);
   const [hoveredHutId, setHoveredHutId] = useState(null);
+  const [profileHoverPosition, setProfileHoverPosition] = useState(null);
   const [startDate, setStartDate] = useState(() => {
     // Date par défaut : demain
     const tomorrow = new Date();
@@ -271,19 +273,12 @@ export function RouteBuilderPanel() {
         <div className="column-content">
           {/* Cabane de départ - cachée une fois sélectionnée */}
           {selectedHuts.length === 0 && (
-            <div className="section-card">
-              <h3 className="section-title">Cabane de départ</h3>
-              <p className="text-muted text-sm mb-3">
-                Choisissez la première cabane de votre itinéraire
-              </p>
-              <HutSearch
-                huts={allHuts}
-                onSelect={handleSelectStartHut}
-                isLoading={isLoadingHuts}
-                placeholder="Rechercher une cabane (ex: Unna Allakas)"
-              />
-            </div>
-          )}
+		  <StartPointSelector
+			huts={allHuts}
+			onSelect={handleSelectStartHut}
+			isLoading={isLoadingHuts}
+		  />
+)}
 
           {/* Paramètres */}
           {selectedHuts.length > 0 && (
@@ -538,15 +533,25 @@ export function RouteBuilderPanel() {
         </div>
       </div>
 
-      {/* COLONNE DROITE */}
+      {/* COLONNE DROITE - Profil + Carte */}
       <div className="route-builder-right">
-        <RouteMap 
-          selectedHuts={selectedHuts} 
-          reachableHuts={reachableHuts}
-          hoveredHutId={hoveredHutId}
-          onHutHover={setHoveredHutId}
-          onHutClick={handleAddHut}
-        />
+        {selectedHuts.length >= 2 && (
+          <ElevationProfile 
+            selectedHuts={selectedHuts} 
+            onHutHover={setHoveredHutId}
+            onPositionHover={setProfileHoverPosition}
+          />
+        )}
+        <div className="map-container">
+          <RouteMap 
+            selectedHuts={selectedHuts} 
+            reachableHuts={reachableHuts}
+            hoveredHutId={hoveredHutId}
+            onHutHover={setHoveredHutId}
+            onHutClick={handleAddHut}
+            profileHoverPosition={profileHoverPosition}
+          />
+        </div>
       </div>
     </div>
   );

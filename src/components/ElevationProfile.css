@@ -1,0 +1,287 @@
+/* src/components/ElevationProfile.css */
+
+.elevation-profile {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 14px 16px 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.elevation-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.elevation-profile-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.elevation-profile-content {
+  display: flex;
+  gap: 8px;
+}
+
+/* Axe Y (vertical) */
+.elevation-axis-y {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2px 0;
+  min-width: 36px;
+  text-align: right;
+}
+
+.elevation-tick-y {
+  font-size: 9px;
+  color: #94a3b8;
+  line-height: 1;
+}
+
+/* Graphique */
+.elevation-chart {
+  flex: 1;
+  position: relative;
+  height: 90px;
+  cursor: crosshair;
+}
+
+.elevation-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.elevation-grid {
+  stroke: #f1f5f9;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.elevation-line {
+  fill: none;
+  stroke: #1e3a8a;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Marqueurs des cabanes */
+.elevation-marker {
+  position: absolute;
+  transform: translateX(-50%) translateY(30%);
+  z-index: 20;
+  cursor: pointer;
+}
+
+.elevation-marker-cabin {
+  display: block;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.elevation-marker-hovered .elevation-marker-cabin {
+  color: #1e3a8a;
+  transform: scale(1.1);
+  transform-origin: bottom center;
+}
+
+
+.elevation-marker-line {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1px;
+  height: 200px;
+  background: linear-gradient(to bottom, #3b82f6, transparent);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Tooltip élégant - effet verre (glassmorphism) */
+.elevation-marker-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #1e293b;
+  padding: 8px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.8) inset;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  z-index: 100;
+  pointer-events: none;
+}
+
+.elevation-marker-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.75);
+}
+
+.elevation-tooltip-name {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 3px;
+  color: #1e293b;
+}
+
+.elevation-tooltip-data {
+  display: flex;
+  gap: 10px;
+  font-size: 10px;
+}
+
+.elevation-tooltip-data .tooltip-altitude,
+.elevation-tooltip-data .tooltip-distance {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+}
+
+.elevation-tooltip-data .tooltip-altitude::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #3b82f6;
+}
+
+.elevation-tooltip-data .tooltip-distance::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+/* Tooltip aligné à gauche pour la première cabane */
+.elevation-marker-tooltip.tooltip-left {
+  left: 0;
+  transform: translateX(0);
+}
+
+.elevation-marker-tooltip.tooltip-left::after {
+  left: 12px;
+  transform: translateX(0);
+}
+
+/* Tooltip aligné à droite pour la dernière cabane */
+.elevation-marker-tooltip.tooltip-right {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+}
+
+.elevation-marker-tooltip.tooltip-right::after {
+  left: auto;
+  right: 12px;
+  transform: translateX(0);
+}
+
+/* Tooltip en dessous pour les cabanes hautes */
+.elevation-marker-tooltip.tooltip-below {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+
+.elevation-marker-tooltip.tooltip-below::after {
+  top: auto;
+  bottom: 100%;
+  border: 5px solid transparent;
+  border-top-color: transparent;
+  border-bottom-color: rgba(255, 255, 255, 0.75);
+}
+
+/* Ligne vers le bas pour les cabanes hautes */
+.elevation-marker-line.line-below {
+  top: 100%;
+  bottom: auto;
+  height: 200px;
+  background: linear-gradient(to top, #3b82f6, transparent);
+}
+
+/* Axe X (horizontal) */
+.elevation-axis-x {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  margin-left: 44px;
+  font-size: 9px;
+  color: #94a3b8;
+}
+
+/* Curseur de position (survol du profil) */
+.elevation-cursor {
+  position: absolute;
+  transform: translate(-50%, 50%);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.elevation-cursor-dot {
+  width: 6px;
+  height: 6px;
+  background: #3b82f6;
+  border: 1.5px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.4);
+}
+
+.elevation-cursor-line {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1px;
+  height: 150px;
+  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.5), transparent);
+  transform: translateX(-50%);
+}
+
+.elevation-cursor-tooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(59, 130, 246, 0.9);
+  color: #ffffff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .elevation-profile {
+    padding: 10px 12px 8px;
+  }
+  
+  .elevation-chart {
+    height: 70px;
+  }
+  
+  .elevation-axis-y {
+    min-width: 30px;
+  }
+}

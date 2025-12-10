@@ -17,6 +17,49 @@ import './RouteMap.css';
 const { BaseLayer, Overlay } = LayersControl;
 
 // -----------------------------------------------------------------------------
+// Invalider la taille de la carte quand le conteneur change
+// -----------------------------------------------------------------------------
+function InvalidateSizeOnChange({ selectedCount }) {
+  const map = useMap();
+  const prevSelectedCount = React.useRef(selectedCount);
+  
+  useEffect(() => {
+    // Invalider immédiatement
+    map.invalidateSize();
+    
+    // Et après un délai pour les animations CSS
+    const timer1 = setTimeout(() => map.invalidateSize(), 50);
+    const timer2 = setTimeout(() => map.invalidateSize(), 150);
+    const timer3 = setTimeout(() => map.invalidateSize(), 300);
+    
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+    };
+  }, [map, selectedCount]);
+  
+  useEffect(() => {
+    // Observer les changements de taille du conteneur
+    const container = map.getContainer();
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(container);
+    
+    // Observer aussi le parent (pour quand le profil apparaît/disparaît)
+    const parent = container.parentElement;
+    if (parent) {
+      resizeObserver.observe(parent);
+    }
+    
+    return () => resizeObserver.disconnect();
+  }, [map]);
+  
+  return null;
+}
+
+// -----------------------------------------------------------------------------
 // FitBounds sur l'ensemble des positions (itinéraire + candidates)
 // -----------------------------------------------------------------------------
 function FitBoundsOnRoute({ positions, selectedCount, reachableCount }) {
@@ -38,8 +81,11 @@ function FitBoundsOnRoute({ positions, selectedCount, reachableCount }) {
     // Ne recalculer que si les counts ont changé
     if (!countsChanged) return;
 
-    // Petit délai pour laisser le temps aux markers de se placer
+    // Délai plus long pour laisser le temps à invalidateSize de s'exécuter
     const timer = setTimeout(() => {
+      // Forcer une dernière invalidation juste avant le fitBounds
+      map.invalidateSize();
+      
       if (positions.length === 1) {
         map.setView(positions[0], 10);
         return;
@@ -54,7 +100,7 @@ function FitBoundsOnRoute({ positions, selectedCount, reachableCount }) {
           duration: 0.3
         });
       }
-    }, 100);
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [map, positions, selectedCount, reachableCount]);
@@ -565,7 +611,8 @@ export function RouteMap({
   reachableHuts = [],
   hoveredHutId = null,
   onHutHover = () => {},
-  onHutClick = () => {}
+  onHutClick = () => {},
+  profileHoverPosition = null
 }) {
   const { markers, hasRoute, viaHutIds } = useMemo(
     () => buildMarkersData(selectedHuts, reachableHuts),
@@ -673,7 +720,8 @@ export function RouteMap({
             />
           </BaseLayer>
 
-          <Overlay checked name="Pistes de ski (OpenSnowMap)">
+          {/* Overlay OpenSnowMap désactivé par défaut (certificat SSL invalide) */}
+          <Overlay name="Pistes de ski (OpenSnowMap)">
             <TileLayer
               attribution="&copy; OpenStreetMap contributors, tiles &copy; www.opensnowmap.org"
               url="https://tiles.opensnowmap.org/pistes/{z}/{x}/{y}.png"
@@ -688,6 +736,8 @@ export function RouteMap({
           selectedCount={selectedHuts.length}
           reachableCount={reachableHuts.length} 
         />
+        
+        <InvalidateSizeOnChange selectedCount={selectedHuts.length} />
 
         {/* Tracé de l'itinéraire */}
         {routeSegments.map((seg, idx) => (
@@ -743,6 +793,21 @@ export function RouteMap({
             </CircleMarker>
           );
         })}
+        
+        {/* Marqueur de position survolée sur le profil */}
+        {profileHoverPosition && (
+          <CircleMarker
+            center={[profileHoverPosition.lat, profileHoverPosition.lng]}
+            radius={8}
+            pathOptions={{
+              fillColor: '#3b82f6',
+              fillOpacity: 1,
+              color: '#ffffff',
+              weight: 3,
+              opacity: 1,
+            }}
+          />
+        )}
       </MapContainer>
     </div>
   );
