@@ -21,29 +21,12 @@ const { BaseLayer, Overlay } = LayersControl;
 // -----------------------------------------------------------------------------
 function InvalidateSizeOnChange({ selectedCount }) {
   const map = useMap();
-  const prevSelectedCount = React.useRef(selectedCount);
-  
-  useEffect(() => {
-    // Invalider immédiatement
-    map.invalidateSize();
-    
-    // Et après un délai pour les animations CSS
-    const timer1 = setTimeout(() => map.invalidateSize(), 50);
-    const timer2 = setTimeout(() => map.invalidateSize(), 150);
-    const timer3 = setTimeout(() => map.invalidateSize(), 300);
-    
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-    };
-  }, [map, selectedCount]);
   
   useEffect(() => {
     // Observer les changements de taille du conteneur
     const container = map.getContainer();
     const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize();
+      map.invalidateSize({ animate: false });
     });
     resizeObserver.observe(container);
     
@@ -81,9 +64,8 @@ function FitBoundsOnRoute({ positions, selectedCount, reachableCount }) {
     // Ne recalculer que si les counts ont changé
     if (!countsChanged) return;
 
-    // Délai plus long pour laisser le temps à invalidateSize de s'exécuter
+    // Délai pour laisser le temps à invalidateSize de s'exécuter
     const timer = setTimeout(() => {
-      // Forcer une dernière invalidation juste avant le fitBounds
       map.invalidateSize();
       
       if (positions.length === 1) {

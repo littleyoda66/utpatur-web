@@ -163,6 +163,14 @@
   margin-bottom: 0;
 }
 
+.param-group-inline {
+  margin-bottom: 8px;
+}
+
+.param-group-inline .param-label {
+  margin-bottom: 0;
+}
+
 .param-label {
   display: flex;
   justify-content: space-between;
@@ -280,8 +288,8 @@
 }
 
 .segment-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid #e2e8f0;
   background: #ffffff;

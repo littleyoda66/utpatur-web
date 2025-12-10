@@ -314,22 +314,21 @@ export function RouteBuilderPanel() {
                 </div>
               </div>
 
-              <div className="param-group">
+              <div className="param-group param-group-inline">
                 <label className="param-label">
                   <span>Segments maximum</span>
+                  <div className="segments-selector">
+                    {[1, 2, 3].map(num => (
+                      <button
+                        key={num}
+                        className={`segment-btn ${maxSegments === num ? 'segment-btn-active' : ''}`}
+                        onClick={() => setMaxSegments(num)}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
                 </label>
-                <div className="segments-selector">
-                  {[1, 2, 3].map(num => (
-                    <button
-                      key={num}
-                      className={`segment-btn ${maxSegments === num ? 'segment-btn-active' : ''}`}
-                      onClick={() => setMaxSegments(num)}
-                    >
-                      {num}
-                    </button>
-                  ))}
-                </div>
-                <p className="param-hint">Plus de segments = trajets via cabanes intermédiaires</p>
               </div>
             </div>
           )}
