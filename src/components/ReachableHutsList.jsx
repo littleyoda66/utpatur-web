@@ -1,6 +1,6 @@
 // src/components/ReachableHutsList.jsx
 import React, { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Train, Bus, Ship } from 'lucide-react';
 import './ReachableHutsList.css';
 
 // Composant drapeau SVG
@@ -47,11 +47,40 @@ function Flag({ countryCode }) {
   return null;
 }
 
+// Icône de transport selon le mode
+function TransportIcon({ mode, size = 11 }) {
+  const props = { size, strokeWidth: 1.5 };
+  switch (mode) {
+    case 'train': return <Train {...props} className="transport-icon transport-icon-train" />;
+    case 'bus': return <Bus {...props} className="transport-icon transport-icon-bus" />;
+    case 'boat': return <Ship {...props} className="transport-icon transport-icon-boat" />;
+    default: return null;
+  }
+}
+
+// Composant pour afficher les icônes transport d'une cabane
+function TransportIcons({ transports }) {
+  if (!transports || transports.length === 0) return null;
+  
+  // Extraire les modes uniques
+  const modes = [...new Set(transports.map(t => t.transport?.mode).filter(Boolean))];
+  if (modes.length === 0) return null;
+  
+  return (
+    <span className="transport-icons">
+      {modes.map(mode => (
+        <TransportIcon key={mode} mode={mode} />
+      ))}
+    </span>
+  );
+}
+
 export function ReachableHutsList({ 
   huts = [], 
   onSelect, 
   hoveredHutId = null,
-  onHover = () => {}
+  onHover = () => {},
+  trailheads = []
 }) {
   const [sortBy, setSortBy] = useState('distance'); // 'distance' | 'name'
 
@@ -66,6 +95,19 @@ export function ReachableHutsList({
       return (a.total_distance_km || 0) - (b.total_distance_km || 0);
     });
   }, [huts, sortBy]);
+
+  // Créer un map des trailheads pour lookup rapide
+  const trailheadMap = useMemo(() => {
+    const map = new Map();
+    trailheads.forEach(t => {
+      const id = t.hut_id;
+      if (!map.has(id)) {
+        map.set(id, []);
+      }
+      map.get(id).push(t);
+    });
+    return map;
+  }, [trailheads]);
 
   if (!huts || huts.length === 0) {
     return null;
@@ -97,6 +139,7 @@ export function ReachableHutsList({
         {sortedHuts.map((hut) => {
           const hutId = hut.hut_id || hut.id;
           const isHovered = hoveredHutId === hutId;
+          const hutTransports = trailheadMap.get(hutId) || [];
           
           return (
             <div
@@ -109,7 +152,8 @@ export function ReachableHutsList({
               <div className="reachable-hut-info">
                 <div className="reachable-hut-name">
                   <Flag countryCode={hut.country_code} />
-                  {hut.name}
+                  <span className="reachable-hut-name-text">{hut.name}</span>
+                  <TransportIcons transports={hutTransports} />
                 </div>
                 <div className="reachable-hut-stats">
                   <span>{(hut.total_distance_km || 0).toFixed(1)} km</span>

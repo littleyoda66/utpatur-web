@@ -17,6 +17,8 @@
   width: 320px;
   min-width: 320px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .route-builder-center {
@@ -163,6 +165,14 @@
   margin-bottom: 0;
 }
 
+.param-group-inline {
+  margin-bottom: 8px;
+}
+
+.param-group-inline .param-label {
+  margin-bottom: 0;
+}
+
 .param-label {
   display: flex;
   justify-content: space-between;
@@ -280,8 +290,8 @@
 }
 
 .segment-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -1098,4 +1108,189 @@
   color: #166534;
   text-align: center;
   font-weight: 500;
+}
+
+/* ============================================
+   TRANSPORT BLOCKS
+   ============================================ */
+
+.transport-block {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.transport-block-departure {
+  background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+  border-color: #fde047;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.transport-block-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: 50%;
+  color: #0284c7;
+}
+
+.transport-block-departure .transport-block-icon {
+  color: #ca8a04;
+}
+
+.transport-block-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.transport-block-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #0369a1;
+  margin-bottom: 4px;
+}
+
+.transport-block-departure .transport-block-title {
+  color: #a16207;
+}
+
+.transport-block-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #334155;
+  margin-top: 3px;
+}
+
+.transport-block-option .transport-icon {
+  flex-shrink: 0;
+}
+
+.transport-seasonal {
+  font-size: 9px;
+  padding: 1px 5px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+/* Transport icons */
+.transport-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.transport-icon {
+  color: #64748b;
+}
+
+.transport-icon-train {
+  color: #1e3a8a;
+}
+
+.transport-icon-bus {
+  color: #ca8a04;
+}
+
+.transport-icon-boat {
+  color: #0284c7;
+}
+
+/* Button secondary */
+.btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.btn-outline.btn-secondary {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.btn-outline.btn-secondary:hover {
+  background: #f8fafc;
+}
+
+/* Margin utilities */
+.mt-2 {
+  margin-top: 8px;
+}
+
+.mt-3 {
+  margin-top: 12px;
+}
+
+/* ============================================
+   CLOSED ROUTE OVERLAY
+   ============================================ */
+
+.closed-route-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 2px dashed #cbd5e1;
+}
+
+.closed-route-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.closed-route-icon {
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+.closed-route-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 4px 0;
+}
+
+.closed-route-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* ============================================
+   VERSION BADGE
+   ============================================ */
+
+.version-badge {
+  padding: 8px 12px;
+  font-size: 10px;
+  color: #94a3b8;
+  font-family: ui-monospace, monospace;
+  text-align: center;
+  border-top: 1px solid #f1f5f9;
+  margin-top: auto;
 }

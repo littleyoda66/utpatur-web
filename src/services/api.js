@@ -35,6 +35,15 @@ export const hutsApi = {
     return data;
   },
 
+/**
+   * Récupère les trailheads (cabanes accessibles en transports publics)
+   */
+  async getTrailheads() {
+    const response = await apiClient.get('/huts/trailheads');
+    return response.data;
+  },
+  
+  
   /**
    * Recherche de cabanes par nom
    */
