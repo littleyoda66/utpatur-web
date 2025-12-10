@@ -124,21 +124,23 @@ export function RouteBuilderPanel() {
   }, []);
 
   // Charger les cabanes atteignables quand on sélectionne une cabane
+  // Avec debounce pour éviter trop d'appels API lors du changement de paramètres
   useEffect(() => {
-    const loadReachable = async () => {
-      if (selectedHuts.length === 0) {
-        setReachableHuts([]);
-        return;
-      }
+    if (selectedHuts.length === 0) {
+      setReachableHuts([]);
+      return;
+    }
 
-      const lastHut = selectedHuts[selectedHuts.length - 1];
-      const hutId = lastHut.hut_id || lastHut.id;
-      
-      if (!hutId) {
-        console.error('Pas de hut_id trouvé pour:', lastHut);
-        return;
-      }
-      
+    const lastHut = selectedHuts[selectedHuts.length - 1];
+    const hutId = lastHut.hut_id || lastHut.id;
+    
+    if (!hutId) {
+      console.error('Pas de hut_id trouvé pour:', lastHut);
+      return;
+    }
+
+    // Debounce de 300ms pour les changements de paramètres
+    const timeoutId = setTimeout(async () => {
       setLoading(true);
       clearError();
 
@@ -164,9 +166,9 @@ export function RouteBuilderPanel() {
       } finally {
         setLoading(false);
       }
-    };
+    }, 300);
 
-    loadReachable();
+    return () => clearTimeout(timeoutId);
   }, [selectedHuts, maxDistanceKm, maxSegments]);
 
   const handleSelectStartHut = (hut) => {
@@ -288,32 +290,46 @@ export function RouteBuilderPanel() {
               <div className="param-group">
                 <label className="param-label">
                   <span>Distance maximale par jour</span>
-                  <span className="param-value">{maxDistanceKm} km</span>
+                  <span className={`param-value ${maxDistanceKm >= 30 ? 'param-value-warning' : ''}`}>{maxDistanceKm} km</span>
                 </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="40"
-                  step="1"
-                  value={maxDistanceKm}
-                  onChange={(e) => setMaxDistance(parseInt(e.target.value))}
-                  className="slider"
-                />
+                <div className="slider-container">
+                  <input
+                    type="range"
+                    min="5"
+                    max="50"
+                    step="5"
+                    value={maxDistanceKm}
+                    onChange={(e) => setMaxDistance(parseInt(e.target.value))}
+                    className={`slider ${maxDistanceKm >= 30 ? 'slider-warning' : ''}`}
+                  />
+                  <div className="slider-ticks">
+                    {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(val => (
+                      <div key={val} className={`slider-tick ${val >= 30 ? 'slider-tick-warning' : ''}`} />
+                    ))}
+                  </div>
+                </div>
                 <div className="slider-labels">
-                  <span>0 km</span>
-                  <span>40 km</span>
+                  <span>5 km</span>
+                  <span>50 km</span>
                 </div>
               </div>
 
               <div className="param-group">
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={maxSegments >= 2}
-                    onChange={(e) => setMaxSegments(e.target.checked ? 2 : 1)}
-                  />
-                  <span>Autoriser jusqu'à 2 segments</span>
+                <label className="param-label">
+                  <span>Segments maximum</span>
                 </label>
+                <div className="segments-selector">
+                  {[1, 2, 3].map(num => (
+                    <button
+                      key={num}
+                      className={`segment-btn ${maxSegments === num ? 'segment-btn-active' : ''}`}
+                      onClick={() => setMaxSegments(num)}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+                <p className="param-hint">Plus de segments = trajets via cabanes intermédiaires</p>
               </div>
             </div>
           )}
