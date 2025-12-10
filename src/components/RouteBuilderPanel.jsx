@@ -5,9 +5,38 @@ import { hutsApi } from '../services/api';
 import { StartPointSelector } from './StartPointSelector';
 import { ReachableHutsList } from './ReachableHutsList';
 import { RouteMap } from './RouteMap';
-import { Trash2, Bed, Compass, TrendingUp, TrendingDown } from 'lucide-react';
+import { Trash2, Bed, Compass, TrendingUp, TrendingDown, Train, Bus, Ship, Lock, Unlock } from 'lucide-react';
 import { ElevationProfile } from './ElevationProfile';
+import { version } from '../../package.json';
 import './RouteBuilderPanel.css';
+
+// Icône de transport selon le mode
+function TransportIcon({ mode, size = 12 }) {
+  const props = { size, strokeWidth: 1.5 };
+  switch (mode) {
+    case 'train': return <Train {...props} className="transport-icon transport-icon-train" />;
+    case 'bus': return <Bus {...props} className="transport-icon transport-icon-bus" />;
+    case 'boat': return <Ship {...props} className="transport-icon transport-icon-boat" />;
+    default: return null;
+  }
+}
+
+// Composant pour afficher les icônes transport d'une cabane
+function TransportIcons({ transports }) {
+  if (!transports || transports.length === 0) return null;
+  
+  // Extraire les modes uniques
+  const modes = [...new Set(transports.map(t => t.transport?.mode).filter(Boolean))];
+  if (modes.length === 0) return null;
+  
+  return (
+    <span className="transport-icons">
+      {modes.map(mode => (
+        <TransportIcon key={mode} mode={mode} size={11} />
+      ))}
+    </span>
+  );
+}
 
 // Composant drapeau SVG compact
 function Flag({ countryCode, size = 14 }) {
@@ -59,17 +88,23 @@ export function RouteBuilderPanel() {
     maxSegments,
     isLoading,
     error,
+    isRouteClosed,
+    trailheads,
     setStartHut,
     addHut,
     removeLastHut,
     resetRoute,
+    closeRoute,
+    reopenRoute,
     setReachableHuts,
     setMaxDistance,
     setMaxSegments,
     setLoading,
     setError,
     clearError,
-    getStats
+    getStats,
+    setTrailheads,
+    getTransportInfo
   } = useRouteStore();
 
   const [allHuts, setAllHuts] = useState([]);
@@ -103,7 +138,7 @@ export function RouteBuilderPanel() {
     return Math.round(num).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
   };
 
-  // Charger toutes les cabanes au démarrage
+  // Charger toutes les cabanes et les trailheads au démarrage
   useEffect(() => {
     const loadAllHuts = async () => {
       setIsLoadingHuts(true);
@@ -120,13 +155,31 @@ export function RouteBuilderPanel() {
       }
     };
 
+    const loadTrailheads = async () => {
+      try {
+        const response = await hutsApi.getTrailheads();
+        const data = response || [];
+        setTrailheads(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Erreur chargement trailheads:', err);
+        setTrailheads([]);
+      }
+    };
+
     loadAllHuts();
-  }, []);
+    loadTrailheads();
+  }, [setTrailheads]);
 
   // Charger les cabanes atteignables quand on sélectionne une cabane
   // Avec debounce pour éviter trop d'appels API lors du changement de paramètres
   useEffect(() => {
     if (selectedHuts.length === 0) {
+      setReachableHuts([]);
+      return;
+    }
+
+    // Si l'itinéraire est clos, ne pas charger les cabanes atteignables
+    if (isRouteClosed) {
       setReachableHuts([]);
       return;
     }
@@ -169,7 +222,7 @@ export function RouteBuilderPanel() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [selectedHuts, maxDistanceKm, maxSegments]);
+  }, [selectedHuts, maxDistanceKm, maxSegments, isRouteClosed, setReachableHuts, setLoading, clearError, setError]);
 
   const handleSelectStartHut = (hut) => {
     setStartHut(hut);
@@ -283,7 +336,7 @@ export function RouteBuilderPanel() {
 )}
 
           {/* Paramètres */}
-          {selectedHuts.length > 0 && (
+          {selectedHuts.length > 0 && !isRouteClosed && (
             <div className="section-card parameters-card">
               <h3 className="section-title">Paramètres de la prochaine étape</h3>
               
@@ -334,7 +387,7 @@ export function RouteBuilderPanel() {
           )}
 
           {/* Cabanes atteignables */}
-          {selectedHuts.length > 0 && (
+          {selectedHuts.length > 0 && !isRouteClosed && (
             <div className="section-card">
               <h3 className="section-title">
                 Cabanes atteignables depuis {lastHut?.name}
@@ -373,9 +426,21 @@ export function RouteBuilderPanel() {
                     onSelect={handleAddHut}
                     hoveredHutId={hoveredHutId}
                     onHover={setHoveredHutId}
+                    trailheads={trailheads}
                   />
                 </>
               )}
+            </div>
+          )}
+
+          {/* Overlay cadenas quand l'itinéraire est clos */}
+          {selectedHuts.length > 0 && isRouteClosed && (
+            <div className="section-card closed-route-overlay">
+              <div className="closed-route-content">
+                <Lock size={48} strokeWidth={1.5} className="closed-route-icon" />
+                <p className="closed-route-text">Itinéraire clos</p>
+                <p className="closed-route-hint">Rouvrez l'itinéraire pour continuer la planification</p>
+              </div>
             </div>
           )}
 
@@ -390,6 +455,9 @@ export function RouteBuilderPanel() {
             </div>
           )}
         </div>
+
+        {/* Badge version */}
+        <div className="version-badge">v{version}</div>
       </div>
 
       {/* COLONNE CENTRALE */}
@@ -458,11 +526,47 @@ export function RouteBuilderPanel() {
 
               {/* Calendrier */}
               <div className="expedition-calendar">
+                {/* Bloc transport d'arrivée (avant la première cabane si trailhead) */}
+                {(() => {
+                  const firstHut = selectedHuts[0];
+                  const firstHutId = firstHut?.hut_id || firstHut?.id;
+                  const firstTransports = trailheads.filter(t => t.hut_id === firstHutId);
+                  if (firstTransports.length > 0) {
+                    return (
+                      <div className="transport-block transport-block-arrival">
+                        <div className="transport-block-icon">
+                          <Compass size={14} />
+                        </div>
+                        <div className="transport-block-content">
+                          <div className="transport-block-title">Accès transports publics</div>
+                          {firstTransports.map((t, idx) => (
+                            t.transport && (
+                              <div key={idx} className="transport-block-option">
+                                <TransportIcon mode={t.transport.mode} size={12} />
+                                <span>
+                                  {t.transport.mode === 'train' ? 'Train' : t.transport.mode === 'bus' ? 'Bus' : 'Bateau'}
+                                  {t.transport.line && ` ${t.transport.line}`}
+                                  {t.transport.hub && ` depuis ${t.transport.hub}`}
+                                  {t.transport.duration && ` (${t.transport.duration})`}
+                                </span>
+                                {t.transport.seasonal && <span className="transport-seasonal">Saisonnier</span>}
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 {selectedHuts.map((hut, index) => {
                   const dayDate = formatDate(startDate, index);
                   const isToday = new Date().toDateString() === dayDate.toDateString();
                   const nextHut = selectedHuts[index + 1];
                   const showSegment = nextHut && !nextHut.isRestDay;
+                  const hutId = hut.hut_id || hut.id;
+                  const hutTransports = trailheads.filter(t => t.hut_id === hutId);
                   
                   return (
                     <React.Fragment key={`${hut.hut_id || hut.id}-${index}`}>
@@ -492,6 +596,7 @@ export function RouteBuilderPanel() {
                           <div className="calendar-day-hut">
                             <Flag countryCode={hut.country_code} size={14} />
                             <span className="calendar-day-hut-name">{hut.name}</span>
+                            <TransportIcons transports={hutTransports} />
                           </div>
                           
                           {(hut.via || hut.via_hut) && !hut.isRestDay && (
@@ -527,6 +632,40 @@ export function RouteBuilderPanel() {
                     </React.Fragment>
                   );
                 })}
+
+                {/* Bloc transport de départ (après la dernière cabane si trailhead et itinéraire clos) */}
+                {isRouteClosed && (() => {
+                  const lastHut = selectedHuts[selectedHuts.length - 1];
+                  const lastHutId = lastHut?.hut_id || lastHut?.id;
+                  const lastTransports = trailheads.filter(t => t.hut_id === lastHutId);
+                  if (lastTransports.length > 0) {
+                    return (
+                      <div className="transport-block transport-block-departure">
+                        <div className="transport-block-icon">
+                          <Compass size={14} />
+                        </div>
+                        <div className="transport-block-content">
+                          <div className="transport-block-title">Retour transports publics</div>
+                          {lastTransports.map((t, idx) => (
+                            t.transport && (
+                              <div key={idx} className="transport-block-option">
+                                <TransportIcon mode={t.transport.mode} size={12} />
+                                <span>
+                                  {t.transport.mode === 'train' ? 'Train' : t.transport.mode === 'bus' ? 'Bus' : 'Bateau'}
+                                  {t.transport.line && ` ${t.transport.line}`}
+                                  {t.transport.hub && ` vers ${t.transport.hub}`}
+                                  {t.transport.duration && ` (${t.transport.duration})`}
+                                </span>
+                                {t.transport.seasonal && <span className="transport-seasonal">Saisonnier</span>}
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* Date de fin */}
@@ -536,9 +675,29 @@ export function RouteBuilderPanel() {
                 </div>
               )}
 
+              {/* Bouton clore/rouvrir l'itinéraire */}
+              {selectedHuts.length > 1 && (
+                <button
+                  className={`btn btn-sm w-full mt-3 ${isRouteClosed ? 'btn-outline btn-secondary' : 'btn-primary'}`}
+                  onClick={() => isRouteClosed ? reopenRoute() : closeRoute()}
+                >
+                  {isRouteClosed ? (
+                    <>
+                      <Unlock size={14} />
+                      <span>Rouvrir l'itinéraire</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={14} />
+                      <span>Clore l'itinéraire</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               {/* Bouton réinitialiser */}
               <button
-                className="btn btn-outline btn-danger btn-sm w-full mt-4"
+                className="btn btn-outline btn-danger btn-sm w-full mt-2"
                 onClick={resetRoute}
               >
                 Réinitialiser
@@ -560,11 +719,12 @@ export function RouteBuilderPanel() {
         <div className="map-container">
           <RouteMap 
             selectedHuts={selectedHuts} 
-            reachableHuts={reachableHuts}
+            reachableHuts={isRouteClosed ? [] : reachableHuts}
             hoveredHutId={hoveredHutId}
             onHutHover={setHoveredHutId}
             onHutClick={handleAddHut}
             profileHoverPosition={profileHoverPosition}
+            isRouteClosed={isRouteClosed}
           />
         </div>
       </div>

@@ -16,8 +16,31 @@ export const useRouteStore = create(
       error: null,
       maxDistanceKm: 35,
       maxSegments: 2,
+      isRouteClosed: false,
+      trailheads: [], // Cache des trailheads avec infos transport
       
       // Actions
+      
+      /**
+       * Charger les trailheads depuis l'API
+       */
+      setTrailheads: (trailheads) => set({ trailheads }),
+      
+      /**
+       * Récupérer les infos transport d'une cabane
+       */
+      getTransportInfo: (hutId) => {
+        const { trailheads } = get();
+        return trailheads.filter(t => t.hut_id === hutId);
+      },
+      
+      /**
+       * Vérifier si une cabane est un trailhead
+       */
+      isTrailhead: (hutId) => {
+        const { trailheads } = get();
+        return trailheads.some(t => t.hut_id === hutId);
+      },
       
       /**
        * Sélectionner une cabane de départ
@@ -35,7 +58,8 @@ export const useRouteStore = create(
           selectedHuts: [hut],
           currentRoute: null,
           reachableHuts: [],
-          error: null
+          error: null,
+          isRouteClosed: false
         };
       }),
       
@@ -44,7 +68,9 @@ export const useRouteStore = create(
        * Note: On autorise les boucles et passages multiples
        */
       addHut: (hut, steps = []) => set((state) => {
-        // Plus de vérification de doublon - on autorise les boucles
+        // Si l'itinéraire est clos, on ne peut pas ajouter
+        if (state.isRouteClosed) return state;
+        
         const newSelectedHuts = [...state.selectedHuts, hut];
         
         // Construire la route complète avec les steps (qui contiennent geometry_polyline)
@@ -80,16 +106,17 @@ export const useRouteStore = create(
             selectedHuts: [],
             currentRoute: null,
             reachableHuts: [],
-            error: null
+            error: null,
+            isRouteClosed: false
           };
         }
         
         // Recalculer la route
-        // TODO: implémenter le recalcul correct
         return {
           selectedHuts: newSelectedHuts,
           reachableHuts: [],
-          error: null
+          error: null,
+          isRouteClosed: false
         };
       }),
       
@@ -100,8 +127,19 @@ export const useRouteStore = create(
         selectedHuts: [],
         currentRoute: null,
         reachableHuts: [],
-        error: null
+        error: null,
+        isRouteClosed: false
       }),
+      
+      /**
+       * Clore l'itinéraire
+       */
+      closeRoute: () => set({ isRouteClosed: true, reachableHuts: [] }),
+      
+      /**
+       * Rouvrir l'itinéraire
+       */
+      reopenRoute: () => set({ isRouteClosed: false }),
       
       /**
        * Définir les cabanes atteignables
@@ -125,12 +163,13 @@ export const useRouteStore = create(
        * Exporter l'itinéraire en JSON
        */
       exportRoute: () => {
-        const { selectedHuts, currentRoute } = get();
+        const { selectedHuts, currentRoute, isRouteClosed } = get();
         return {
           version: '2.0.0',
           date: new Date().toISOString(),
           huts: selectedHuts,
-          route: currentRoute
+          route: currentRoute,
+          isRouteClosed
         };
       },
       

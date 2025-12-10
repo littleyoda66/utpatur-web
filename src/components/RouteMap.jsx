@@ -45,24 +45,31 @@ function InvalidateSizeOnChange({ selectedCount }) {
 // -----------------------------------------------------------------------------
 // FitBounds sur l'ensemble des positions (itinéraire + candidates)
 // -----------------------------------------------------------------------------
-function FitBoundsOnRoute({ positions, selectedCount, reachableCount }) {
+function FitBoundsOnRoute({ positions, selectedCount, reachableCount, isRouteClosed }) {
   const map = useMap();
-  const prevCountsRef = React.useRef({ selected: 0, reachable: 0 });
+  const prevStateRef = React.useRef({ posCount: 0, selected: 0, reachable: 0, closed: false });
 
   useEffect(() => {
     if (!positions || positions.length === 0) return;
 
-    // Vérifier si le nombre de cabanes sélectionnées ou atteignables a changé
-    const prevCounts = prevCountsRef.current;
-    const countsChanged = 
-      prevCounts.selected !== selectedCount || 
-      prevCounts.reachable !== reachableCount;
+    // Vérifier si l'état a changé
+    const prevState = prevStateRef.current;
+    const stateChanged = 
+      prevState.posCount !== positions.length ||
+      prevState.selected !== selectedCount || 
+      prevState.reachable !== reachableCount ||
+      prevState.closed !== isRouteClosed;
     
     // Mettre à jour les refs
-    prevCountsRef.current = { selected: selectedCount, reachable: reachableCount };
+    prevStateRef.current = { 
+      posCount: positions.length, 
+      selected: selectedCount, 
+      reachable: reachableCount, 
+      closed: isRouteClosed 
+    };
 
-    // Ne recalculer que si les counts ont changé
-    if (!countsChanged) return;
+    // Ne recalculer que si l'état a changé
+    if (!stateChanged) return;
 
     // Délai pour laisser le temps à invalidateSize de s'exécuter
     const timer = setTimeout(() => {
@@ -85,7 +92,7 @@ function FitBoundsOnRoute({ positions, selectedCount, reachableCount }) {
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [map, positions, selectedCount, reachableCount]);
+  }, [map, positions, selectedCount, reachableCount, isRouteClosed]);
 
   return null;
 }
@@ -491,6 +498,7 @@ function extractViaPositions(selectedHuts) {
     if (!currHut) continue;
 
     const steps = currHut.steps || [];
+    const viaName = currHut.via || currHut.via_hut?.name || currHut.via_hut;
     
     // S'il y a plus d'un step, les points de jonction sont des cabanes via
     if (steps.length > 1) {
@@ -505,7 +513,7 @@ function extractViaPositions(selectedHuts) {
             viaPositions.push({
               hutId: step.to_hut_id,
               position: lastPoint,
-              name: `Via ${step.to_hut_id}` // On n'a pas le nom, juste l'ID
+              name: viaName || null
             });
           }
         }
@@ -594,7 +602,8 @@ export function RouteMap({
   hoveredHutId = null,
   onHutHover = () => {},
   onHutClick = () => {},
-  profileHoverPosition = null
+  profileHoverPosition = null,
+  isRouteClosed = false
 }) {
   const { markers, hasRoute, viaHutIds } = useMemo(
     () => buildMarkersData(selectedHuts, reachableHuts),
@@ -619,12 +628,12 @@ export function RouteMap({
     return pts;
   }, [routeSegments]);
 
-  const allPositions = useMemo(() => {
+  // Positions de l'itinéraire uniquement (pour zoom quand clos)
+  const routeOnlyPositions = useMemo(() => {
     const pts = [...polylinePositions];
     
-    // Ajouter les positions de tous les markers (route + candidates)
-    markers.forEach((m) => {
-      const hut = m.hut;
+    // Ajouter les positions des cabanes de l'itinéraire
+    selectedHuts.forEach((hut) => {
       if (
         hut &&
         typeof hut.latitude === 'number' &&
@@ -634,7 +643,27 @@ export function RouteMap({
       }
     });
     
-    // Ajouter explicitement les candidates (au cas où markers ne les inclut pas toutes)
+    return pts;
+  }, [polylinePositions, selectedHuts]);
+
+  // Positions incluant les candidates (pour zoom quand ouvert)
+  const allPositionsWithCandidates = useMemo(() => {
+    const pts = [...routeOnlyPositions];
+    
+    // Ajouter les positions de tous les markers candidates
+    markers.forEach((m) => {
+      const hut = m.hut;
+      if (
+        m.isCandidate &&
+        hut &&
+        typeof hut.latitude === 'number' &&
+        typeof hut.longitude === 'number'
+      ) {
+        pts.push([hut.latitude, hut.longitude]);
+      }
+    });
+    
+    // Ajouter explicitement les candidates
     reachableHuts.forEach((rh) => {
       if (
         rh &&
@@ -646,7 +675,10 @@ export function RouteMap({
     });
     
     return pts;
-  }, [polylinePositions, markers, reachableHuts]);
+  }, [routeOnlyPositions, markers, reachableHuts]);
+
+  // Choisir les positions selon l'état
+  const allPositions = isRouteClosed ? routeOnlyPositions : allPositionsWithCandidates;
 
   const defaultCenter = useMemo(() => {
     if (polylinePositions.length > 0) {
@@ -716,7 +748,8 @@ export function RouteMap({
         <FitBoundsOnRoute 
           positions={allPositions} 
           selectedCount={selectedHuts.length}
-          reachableCount={reachableHuts.length} 
+          reachableCount={reachableHuts.length}
+          isRouteClosed={isRouteClosed}
         />
         
         <InvalidateSizeOnChange selectedCount={selectedHuts.length} />
@@ -770,7 +803,7 @@ export function RouteMap({
               radius={circleStyle.radius}
             >
               <Tooltip direction="top" offset={[0, -8]}>
-                Point de passage
+                {via.name ? `via ${via.name}` : 'Point de passage'}
               </Tooltip>
             </CircleMarker>
           );

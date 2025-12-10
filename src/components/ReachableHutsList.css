@@ -165,3 +165,42 @@
 .reachable-huts-list::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
+
+/* Transport icons */
+.reachable-hut-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reachable-hut-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transport-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.transport-icon {
+  color: #64748b;
+}
+
+.transport-icon-train {
+  color: #1e3a8a;
+}
+
+.transport-icon-bus {
+  color: #ca8a04;
+}
+
+.transport-icon-boat {
+  color: #0284c7;
+}
