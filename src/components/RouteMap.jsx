@@ -43,13 +43,61 @@ function InvalidateSizeOnChange({ selectedCount }) {
 }
 
 // -----------------------------------------------------------------------------
+// Sauvegarder les bounds et les restaurer si demandé (pour retour de 3D)
+// -----------------------------------------------------------------------------
+function MapBoundsManager({ onMapReady, restoreBounds }) {
+  const map = useMap();
+  
+  // Sauvegarder la référence de la map au montage et à chaque mouvement
+  useEffect(() => {
+    if (map && onMapReady) {
+      // Appeler immédiatement
+      onMapReady(map);
+      
+      // Mettre à jour quand la carte bouge
+      const handleMoveEnd = () => {
+        onMapReady(map);
+      };
+      map.on('moveend', handleMoveEnd);
+      map.on('zoomend', handleMoveEnd);
+      
+      return () => {
+        map.off('moveend', handleMoveEnd);
+        map.off('zoomend', handleMoveEnd);
+      };
+    }
+  }, [map, onMapReady]);
+  
+  // Restaurer les bounds si demandé
+  useEffect(() => {
+    if (restoreBounds && restoreBounds.bounds && map) {
+      // Petit délai pour laisser la carte s'initialiser
+      const timer = setTimeout(() => {
+        map.fitBounds(restoreBounds.bounds, {
+          animate: false,
+          padding: [20, 20]
+        });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [restoreBounds, map]);
+  
+  return null;
+}
+
+// -----------------------------------------------------------------------------
 // FitBounds sur l'ensemble des positions (itinéraire + candidates)
 // -----------------------------------------------------------------------------
-function FitBoundsOnRoute({ positions, selectedCount, reachableCount, isRouteClosed }) {
+function FitBoundsOnRoute({ positions, selectedCount, reachableCount, isRouteClosed, restoreBounds }) {
   const map = useMap();
   const prevStateRef = React.useRef({ posCount: 0, selected: 0, reachable: 0, closed: false });
 
   useEffect(() => {
+    // Ne pas recalculer si on vient de restaurer les bounds (dans la dernière seconde)
+    if (restoreBounds && restoreBounds.timestamp && (Date.now() - restoreBounds.timestamp < 1000)) {
+      return;
+    }
+    
     if (!positions || positions.length === 0) return;
 
     // Vérifier si l'état a changé
@@ -92,7 +140,7 @@ function FitBoundsOnRoute({ positions, selectedCount, reachableCount, isRouteClo
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [map, positions, selectedCount, reachableCount, isRouteClosed]);
+  }, [map, positions, selectedCount, reachableCount, isRouteClosed, restoreBounds]);
 
   return null;
 }
@@ -596,6 +644,10 @@ function HutMarker({
     </React.Fragment>
   );
 }
+
+// -----------------------------------------------------------------------------
+// Composant principal RouteMap
+// -----------------------------------------------------------------------------
 export function RouteMap({ 
   selectedHuts = [], 
   reachableHuts = [],
@@ -603,7 +655,9 @@ export function RouteMap({
   onHutHover = () => {},
   onHutClick = () => {},
   profileHoverPosition = null,
-  isRouteClosed = false
+  isRouteClosed = false,
+  onMapReady = () => {},
+  restoreBounds = null
 }) {
   const { markers, hasRoute, viaHutIds } = useMemo(
     () => buildMarkersData(selectedHuts, reachableHuts),
@@ -701,6 +755,9 @@ export function RouteMap({
           height: '100%',
         }}
       >
+        {/* Gestionnaire de bounds pour la sauvegarde/restauration */}
+        <MapBoundsManager onMapReady={onMapReady} restoreBounds={restoreBounds} />
+        
         <LayersControl position="topright">
           <BaseLayer checked name="Topo (OpenTopoMap)">
             <TileLayer
@@ -750,6 +807,7 @@ export function RouteMap({
           selectedCount={selectedHuts.length}
           reachableCount={reachableHuts.length}
           isRouteClosed={isRouteClosed}
+          restoreBounds={restoreBounds}
         />
         
         <InvalidateSizeOnChange selectedCount={selectedHuts.length} />

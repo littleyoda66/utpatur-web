@@ -9,6 +9,10 @@ import { Trash2, Bed, Compass, TrendingUp, TrendingDown, Train, Bus, Ship, Lock,
 import { ElevationProfile } from './ElevationProfile';
 import { version } from '../../package.json';
 import './RouteBuilderPanel.css';
+import { ClosedRouteActions } from './ClosedRouteActions';
+import './ClosedRouteActions.css';
+import { MapWrapper } from './MapWrapper';
+
 
 // Icône de transport selon le mode
 function TransportIcon({ mode, size = 12 }) {
@@ -110,6 +114,7 @@ export function RouteBuilderPanel() {
   const [allHuts, setAllHuts] = useState([]);
   const [isLoadingHuts, setIsLoadingHuts] = useState(true);
   const [hoveredHutId, setHoveredHutId] = useState(null);
+  const [is3DMode, setIs3DMode] = useState(false);
   const [profileHoverPosition, setProfileHoverPosition] = useState(null);
   const [startDate, setStartDate] = useState(() => {
     // Date par défaut : demain
@@ -434,16 +439,23 @@ export function RouteBuilderPanel() {
             </div>
           )}
 
-          {/* Overlay cadenas quand l'itinéraire est clos */}
-          {selectedHuts.length > 0 && isRouteClosed && (
-            <div className="section-card closed-route-overlay">
-              <div className="closed-route-content">
-                <Lock size={48} strokeWidth={1.5} className="closed-route-icon" />
-                <p className="closed-route-text">Itinéraire clos</p>
-                <p className="closed-route-hint">Rouvrez l'itinéraire pour continuer la planification</p>
-              </div>
-            </div>
-          )}
+          {/* Zone itinéraire clos avec actions */}
+			{selectedHuts.length > 0 && isRouteClosed && (
+			  <div className="section-card closed-route-overlay">
+				<div className="closed-route-content">
+				  <Lock size={48} strokeWidth={1.5} className="closed-route-icon" />
+				  <p className="closed-route-text">Itinéraire clos</p>
+				  <p className="closed-route-hint">Rouvrez l'itinéraire pour continuer la planification</p>
+				</div>
+				
+				{/* Zone d'actions export */}
+				<ClosedRouteActions 
+				  selectedHuts={selectedHuts}
+				  startDate={startDate}
+				  onToggle3D={setIs3DMode}
+				/>
+			  </div>
+			)}
 
           {/* Message si pas de cabane */}
           {selectedHuts.length === 0 && (
@@ -718,15 +730,17 @@ export function RouteBuilderPanel() {
           />
         )}
         <div className="map-container">
-          <RouteMap 
-            selectedHuts={selectedHuts} 
-            reachableHuts={isRouteClosed ? [] : reachableHuts}
-            hoveredHutId={hoveredHutId}
-            onHutHover={setHoveredHutId}
-            onHutClick={handleAddHut}
-            profileHoverPosition={profileHoverPosition}
-            isRouteClosed={isRouteClosed}
-          />
+          <MapWrapper 
+			  selectedHuts={selectedHuts} 
+			  reachableHuts={isRouteClosed ? [] : reachableHuts}
+			  hoveredHutId={hoveredHutId}
+			  onHutHover={setHoveredHutId}
+			  onHutClick={handleAddHut}
+			  profileHoverPosition={profileHoverPosition}
+			  isRouteClosed={isRouteClosed}
+			  is3DMode={is3DMode}
+			  onToggle3D={setIs3DMode}
+			/>
         </div>
       </div>
     </div>
