@@ -61,89 +61,42 @@ function TransportIcon({ mode, size = 14 }) {
   }
 }
 
-// Données des trailheads (points d'accès en transport public)
-const TRAILHEADS = [
-  {
-    name: 'STF Abisko Turiststation',
-    hut_id: 470930791,
-    country_code: 'SE',
-    latitude: 68.3585719,
-    longitude: 18.7836749,
-    transport: { mode: 'train', line: 'Malmbanan', duration: '1h15', hub: 'Kiruna' }
-  },
-  {
-    name: 'Nikkaluokta Sarri AB',
-    hut_id: 13104276489,
-    country_code: 'SE',
-    latitude: 67.8509132,
-    longitude: 19.0119961,
-    transport: { mode: 'bus', line: '92', duration: '1h30', hub: 'Kiruna', seasonal: true }
-  },
-  {
-    name: 'Hotell Riksgränsen',
-    hut_id: 4093500789,
-    country_code: 'SE',
-    latitude: 68.426456,
-    longitude: 18.1249828,
-    transport: { mode: 'train', line: 'Malmbanan', duration: '1h30', hub: 'Kiruna' }
-  },
-  {
-    name: 'Kvikkjokk Fjällstation',
-    hut_id: 1356458317,
-    country_code: 'SE',
-    latitude: 66.9537277,
-    longitude: 17.7196067,
-    transport: { mode: 'bus', line: '47', duration: '2h', hub: 'Jokkmokk' }
-  },
-  {
-    name: 'Saltoluokta Fjällstation',
-    hut_id: 1356402863,
-    country_code: 'SE',
-    latitude: 67.3940048,
-    longitude: 18.5204549,
-    transport: { mode: 'boat', line: 'STF', duration: '30min', hub: 'Kebnats', seasonal: true }
-  },
-  {
-    name: 'Vakkotavare Fjällstuga',
-    hut_id: 339299833,
-    country_code: 'SE',
-    latitude: 67.5818276,
-    longitude: 18.1006482,
-    transport: { mode: 'bus', line: '93', duration: '3h20', hub: 'Gällivare', seasonal: true }
-  },
-  {
-    name: 'Gargia fjellstue',
-    hut_id: 1356457850,
-    country_code: 'NO',
-    latitude: 69.8064524,
-    longitude: 23.4895015,
-    transport: { mode: 'bus', duration: '45min', hub: 'Alta' }
-  }
-];
+// Helper pour formater la durée (minutes → string lisible)
+function formatDuration(minutes) {
+  if (!minutes) return null;
+  if (minutes < 60) return `${minutes}min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
+}
 
-export function StartPointSelector({ huts, onSelect, isLoading }) {
+export function StartPointSelector({ huts, trailheads = [], onSelect, isLoading }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyTrailheads, setShowOnlyTrailheads] = useState(true);
 
-  // Créer un set des IDs de trailheads pour lookup rapide
-  const trailheadIds = useMemo(() => 
-    new Set(TRAILHEADS.map(t => t.hut_id)), 
-    []
-  );
+  // Créer un map des trailheads par hut_id pour lookup rapide
+  const trailheadMap = useMemo(() => {
+    const map = new Map();
+    trailheads.forEach(t => {
+      map.set(t.hut_id, t);
+    });
+    return map;
+  }, [trailheads]);
 
   // Enrichir les huts avec les infos de transport
   const enrichedHuts = useMemo(() => {
     if (!huts) return [];
     
     return huts.map(hut => {
-      const trailhead = TRAILHEADS.find(t => t.hut_id === (hut.hut_id || hut.id));
+      const hutId = hut.hut_id || hut.id;
+      const trailhead = trailheadMap.get(hutId);
       return {
         ...hut,
         isTrailhead: !!trailhead,
         transport: trailhead?.transport || null
       };
     });
-  }, [huts]);
+  }, [huts, trailheadMap]);
 
   // Filtrer les résultats
   const filteredHuts = useMemo(() => {
@@ -263,11 +216,15 @@ export function StartPointSelector({ huts, onSelect, isLoading }) {
                   <div className="item-transport">
                     <TransportIcon mode={hut.transport.mode} />
                     <span className="transport-details">
-                      {hut.transport.mode === 'train' && `Train ${hut.transport.line}`}
-                      {hut.transport.mode === 'bus' && `Bus ${hut.transport.line}`}
-                      {hut.transport.mode === 'boat' && `Bateau ${hut.transport.line}`}
-                      {' · '}
-                      {hut.transport.duration} depuis {hut.transport.hub}
+                      {hut.transport.mode === 'train' && `Train ${hut.transport.line || ''}`}
+                      {hut.transport.mode === 'bus' && `Bus ${hut.transport.line || ''}`}
+                      {hut.transport.mode === 'boat' && `Bateau ${hut.transport.line || ''}`}
+                      {hut.transport.hub && (
+                        <>
+                          {' · '}
+                          {formatDuration(hut.transport.duration_min)} depuis {hut.transport.hub}
+                        </>
+                      )}
                     </span>
                     {hut.transport.seasonal && (
                       <span className="transport-seasonal">saisonnier</span>

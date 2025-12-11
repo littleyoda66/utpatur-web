@@ -330,6 +330,7 @@ export function RouteBuilderPanel() {
           {selectedHuts.length === 0 && (
 		  <StartPointSelector
 			huts={allHuts}
+			trailheads={trailheads}
 			onSelect={handleSelectStartHut}
 			isLoading={isLoadingHuts}
 		  />
