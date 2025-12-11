@@ -149,3 +149,45 @@ export const checkHealth = async () => {
     return null;
   }
 };
+
+// ===== EXPORT API =====
+
+export const exportApi = {
+  /**
+   * Génère un KML pour l'itinéraire et retourne l'URL
+   * @param {Object} routeData - Données de l'itinéraire
+   * @param {Array} routeData.selectedHuts - Liste des cabanes sélectionnées
+   * @param {string} routeData.startDate - Date de départ (YYYY-MM-DD)
+   * @param {string} routeData.expeditionName - Nom de l'expédition (optionnel)
+   */
+  async generateKml(routeData) {
+    const { selectedHuts, startDate, expeditionName = 'Expédition Laponie' } = routeData;
+    
+    // Transformer les données pour l'API
+    const huts = selectedHuts.map(hut => ({
+      hut_id: String(hut.hut_id || hut.id),  // Convertir en string
+      name: hut.name,
+      latitude: hut.latitude,
+      longitude: hut.longitude,
+      country_code: hut.country_code || null,
+      is_rest_day: hut.isRestDay || false
+    }));
+    
+    // Construire les segments (entre chaque paire de cabanes)
+    const segments = selectedHuts.slice(1).map((hut, index) => ({
+      distance_km: hut.total_distance || 0,
+      elevation_gain: Math.round(hut.elevation_gain || 0),
+      elevation_loss: Math.round(hut.elevation_loss || 0),
+      day_index: index + 1
+    }));
+    
+    const { data } = await apiClient.post('/export/kml', {
+      huts,
+      segments,
+      start_date: startDate,
+      expedition_name: expeditionName
+    });
+    
+    return data;
+  }
+};
