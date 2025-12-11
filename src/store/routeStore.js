@@ -5,6 +5,61 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
+// Marge en degrés (~5.5km)
+const BOUNDS_MARGIN = 0.05;
+
+// Bounds par défaut (Laponie)
+const DEFAULT_BOUNDS = {
+  minLat: 67.5,
+  maxLat: 69.0,
+  minLng: 17.5,
+  maxLng: 20.5
+};
+
+/**
+ * Calcule les bounds à partir des cabanes
+ */
+function calculateBounds(selectedHuts, reachableHuts, isRouteClosed) {
+  let minLat = Infinity, maxLat = -Infinity;
+  let minLng = Infinity, maxLng = -Infinity;
+  let hasPoints = false;
+
+  // Cabanes de l'itinéraire
+  selectedHuts.forEach(hut => {
+    if (hut?.latitude && hut?.longitude) {
+      minLat = Math.min(minLat, hut.latitude);
+      maxLat = Math.max(maxLat, hut.latitude);
+      minLng = Math.min(minLng, hut.longitude);
+      maxLng = Math.max(maxLng, hut.longitude);
+      hasPoints = true;
+    }
+  });
+
+  // Cabanes atteignables (seulement si itinéraire ouvert)
+  if (!isRouteClosed) {
+    reachableHuts.forEach(hut => {
+      if (hut?.latitude && hut?.longitude) {
+        minLat = Math.min(minLat, hut.latitude);
+        maxLat = Math.max(maxLat, hut.latitude);
+        minLng = Math.min(minLng, hut.longitude);
+        maxLng = Math.max(maxLng, hut.longitude);
+        hasPoints = true;
+      }
+    });
+  }
+
+  if (!hasPoints) {
+    return DEFAULT_BOUNDS;
+  }
+
+  return {
+    minLat: minLat - BOUNDS_MARGIN,
+    maxLat: maxLat + BOUNDS_MARGIN,
+    minLng: minLng - BOUNDS_MARGIN,
+    maxLng: maxLng + BOUNDS_MARGIN
+  };
+}
+
 export const useRouteStore = create(
   devtools(
     (set, get) => ({
@@ -18,8 +73,16 @@ export const useRouteStore = create(
       maxSegments: 2,
       isRouteClosed: false,
       trailheads: [], // Cache des trailheads avec infos transport
+      mapBounds: DEFAULT_BOUNDS, // Bounds pour la carte
       
       // Actions
+      
+      /**
+       * Recalculer les bounds (appelé automatiquement par les autres actions)
+       */
+      updateBounds: () => set((state) => ({
+        mapBounds: calculateBounds(state.selectedHuts, state.reachableHuts, state.isRouteClosed)
+      })),
       
       /**
        * Charger les trailheads depuis l'API
@@ -54,12 +117,14 @@ export const useRouteStore = create(
           if (!confirmed) return state;
         }
         
+        const newSelectedHuts = [hut];
         return {
-          selectedHuts: [hut],
+          selectedHuts: newSelectedHuts,
           currentRoute: null,
           reachableHuts: [],
           error: null,
-          isRouteClosed: false
+          isRouteClosed: false,
+          mapBounds: calculateBounds(newSelectedHuts, [], false)
         };
       }),
       
@@ -89,7 +154,8 @@ export const useRouteStore = create(
           selectedHuts: newSelectedHuts,
           currentRoute: newRoute,
           reachableHuts: [],
-          error: null
+          error: null,
+          mapBounds: calculateBounds(newSelectedHuts, [], state.isRouteClosed)
         };
       }),
       
@@ -107,7 +173,8 @@ export const useRouteStore = create(
             currentRoute: null,
             reachableHuts: [],
             error: null,
-            isRouteClosed: false
+            isRouteClosed: false,
+            mapBounds: DEFAULT_BOUNDS
           };
         }
         
@@ -116,7 +183,8 @@ export const useRouteStore = create(
           selectedHuts: newSelectedHuts,
           reachableHuts: [],
           error: null,
-          isRouteClosed: false
+          isRouteClosed: false,
+          mapBounds: calculateBounds(newSelectedHuts, [], false)
         };
       }),
       
@@ -128,23 +196,34 @@ export const useRouteStore = create(
         currentRoute: null,
         reachableHuts: [],
         error: null,
-        isRouteClosed: false
+        isRouteClosed: false,
+        mapBounds: DEFAULT_BOUNDS
       }),
       
       /**
        * Clore l'itinéraire
        */
-      closeRoute: () => set({ isRouteClosed: true, reachableHuts: [] }),
+      closeRoute: () => set((state) => ({
+        isRouteClosed: true,
+        reachableHuts: [],
+        mapBounds: calculateBounds(state.selectedHuts, [], true)
+      })),
       
       /**
        * Rouvrir l'itinéraire
        */
-      reopenRoute: () => set({ isRouteClosed: false }),
+      reopenRoute: () => set((state) => ({
+        isRouteClosed: false,
+        mapBounds: calculateBounds(state.selectedHuts, state.reachableHuts, false)
+      })),
       
       /**
        * Définir les cabanes atteignables
        */
-      setReachableHuts: (huts) => set({ reachableHuts: huts }),
+      setReachableHuts: (huts) => set((state) => ({
+        reachableHuts: huts,
+        mapBounds: calculateBounds(state.selectedHuts, huts, state.isRouteClosed)
+      })),
       
       /**
        * Définir les paramètres de recherche

@@ -94,6 +94,7 @@ export function RouteBuilderPanel() {
     error,
     isRouteClosed,
     trailheads,
+    mapBounds,
     setStartHut,
     addHut,
     removeLastHut,
@@ -453,6 +454,7 @@ export function RouteBuilderPanel() {
 				  selectedHuts={selectedHuts}
 				  startDate={startDate}
 				  onToggle3D={setIs3DMode}
+				  is3DMode={is3DMode}
 				/>
 			  </div>
 			)}
@@ -693,6 +695,8 @@ export function RouteBuilderPanel() {
                 <button
                   className={`btn btn-sm w-full mt-3 ${isRouteClosed ? 'btn-outline btn-secondary' : 'btn-primary'}`}
                   onClick={() => isRouteClosed ? reopenRoute() : closeRoute()}
+                  disabled={isRouteClosed && is3DMode}
+                  title={isRouteClosed && is3DMode ? "Fermez d'abord la vue 3D" : undefined}
                 >
                   {isRouteClosed ? (
                     <>
@@ -711,7 +715,10 @@ export function RouteBuilderPanel() {
               {/* Bouton réinitialiser */}
               <button
                 className="btn btn-outline btn-danger btn-sm w-full mt-2"
-                onClick={resetRoute}
+                onClick={() => {
+                  if (is3DMode) setIs3DMode(false);
+                  resetRoute();
+                }}
               >
                 Réinitialiser
               </button>
@@ -740,6 +747,7 @@ export function RouteBuilderPanel() {
 			  isRouteClosed={isRouteClosed}
 			  is3DMode={is3DMode}
 			  onToggle3D={setIs3DMode}
+			  mapBounds={mapBounds}
 			/>
         </div>
       </div>

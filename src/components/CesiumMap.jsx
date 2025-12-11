@@ -105,48 +105,40 @@ function extractRoutePositions(selectedHuts) {
 }
 
 /**
- * Calculer le centre et la hauteur de caméra pour voir tout l'itinéraire
+ * Calculer la vue caméra à partir des bounds
  */
-function calculateCameraView(selectedHuts) {
-  const validHuts = selectedHuts.filter(h => h?.latitude && h?.longitude);
-  if (validHuts.length === 0) return null;
+function getCameraViewFromBounds(mapBounds) {
+  if (!mapBounds) {
+    // Fallback Laponie
+    return {
+      longitude: 18.5,
+      latitude: 64.0,
+      height: 50000
+    };
+  }
 
-  // Trouver les bornes
-  let minLat = Infinity, maxLat = -Infinity;
-  let minLng = Infinity, maxLng = -Infinity;
+  // Centre des bounds
+  const centerLat = (mapBounds.minLat + mapBounds.maxLat) / 2;
+  const centerLng = (mapBounds.minLng + mapBounds.maxLng) / 2;
 
-  validHuts.forEach(hut => {
-    minLat = Math.min(minLat, hut.latitude);
-    maxLat = Math.max(maxLat, hut.latitude);
-    minLng = Math.min(minLng, hut.longitude);
-    maxLng = Math.max(maxLng, hut.longitude);
-  });
+  // Calculer la hauteur en fonction de l'étendue
+  const latSpan = mapBounds.maxLat - mapBounds.minLat;
+  const lngSpan = mapBounds.maxLng - mapBounds.minLng;
+  const maxSpan = Math.max(latSpan, lngSpan, 0.1);
 
-  // Centre géographique
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLng = (minLng + maxLng) / 2;
+  // 1 degré ≈ 111 km
+  // Réduire le multiplicateur pour un zoom plus serré
+  const heightKm = maxSpan * 111 * 0.8;
+  const heightMeters = Math.max(heightKm * 1000, 15000); // minimum 15km
 
-  // Calculer la distance en degrés
-  const latSpan = maxLat - minLat;
-  const lngSpan = maxLng - minLng;
-  const maxSpan = Math.max(latSpan, lngSpan, 0.1); // Minimum 0.1 degré
-
-  // Convertir en hauteur de caméra (approximation)
-  // 1 degré ≈ 111 km, multiplicateur 4x pour bien englober
-  const heightKm = maxSpan * 111 * 4;
-  const heightMeters = Math.max(heightKm * 1000, 60000); // Minimum 60km
-
-  // Décaler la position de la caméra vers le SUD pour compenser le pitch
-  // Avec un pitch de -50°, la caméra regarde vers le nord
-  // On décale d'environ 30% du span vers le sud
-  const cameraLatOffset = latSpan * 0.4;
+  // Décaler la caméra vers le sud pour compenser le pitch (-60°)
+  // et laisser de la marge en bas pour la barre d'instructions
+  const cameraLatOffset = latSpan * 0.7;
 
   return {
     longitude: centerLng,
-    latitude: centerLat - cameraLatOffset, // Caméra au sud du centre
-    height: heightMeters,
-    targetLat: centerLat, // Pour référence
-    targetLng: centerLng
+    latitude: centerLat - cameraLatOffset,
+    height: heightMeters
   };
 }
 
@@ -155,7 +147,8 @@ function calculateCameraView(selectedHuts) {
  */
 export function CesiumMap({ 
   selectedHuts = [],
-  onClose = () => {}
+  onClose = () => {},
+  mapBounds = null
 }) {
   const containerRef = useRef(null);
   const viewerRef = useRef(null);
@@ -167,11 +160,8 @@ export function CesiumMap({
     [selectedHuts]
   );
 
-  // Calculer la vue de caméra
-  const cameraView = useMemo(
-    () => calculateCameraView(selectedHuts),
-    [selectedHuts]
-  );
+  // Calculer la vue caméra à partir des bounds
+  const cameraView = useMemo(() => getCameraViewFromBounds(mapBounds), [mapBounds]);
 
   // Initialiser Cesium
   useEffect(() => {

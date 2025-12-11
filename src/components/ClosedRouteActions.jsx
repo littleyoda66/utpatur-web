@@ -1,6 +1,6 @@
 // src/components/ClosedRouteActions.jsx
 import React, { useState } from 'react';
-import { Globe, Download, FileText, Loader2 } from 'lucide-react';
+import { Globe, Download, Loader2, X } from 'lucide-react';
 import { exportApi } from '../services/api';
 import { config } from '../config';
 import './ClosedRouteActions.css';
@@ -11,7 +11,13 @@ import './ClosedRouteActions.css';
  * - Export KML
  * - Export GPX (futur)
  */
-export function ClosedRouteActions({ selectedHuts, startDate, onToggle3D = () => {} }) {
+export function ClosedRouteActions({ 
+  selectedHuts, 
+  startDate, 
+  onToggle3D = () => {},
+  is3DMode = false,
+  onReopenRoute = null  // Callback pour rouvrir l'itinéraire
+}) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState(null);
 
@@ -28,31 +34,36 @@ export function ClosedRouteActions({ selectedHuts, startDate, onToggle3D = () =>
   const handleOpenIn3D = () => {
     onToggle3D(true);
   };
+  
+  // Fermer la vue 3D
+  const handleClose3D = () => {
+    onToggle3D(false);
+  };
 
-  // Télécharger le KML
-  const handleDownloadKml = async () => {
+  // Télécharger le GPX
+  const handleDownloadGpx = async () => {
     setIsExporting(true);
     setExportMessage(null);
     
     try {
-      const result = await exportApi.generateKml({
+      const result = await exportApi.generateGpx({
         selectedHuts,
         startDate,
         expeditionName: getExpeditionName()
       });
       
       // Télécharger via l'URL directe
-      const kmlUrl = `${config.apiUrl}${result.kml_url}`;
-      window.open(kmlUrl, '_blank');
+      const gpxUrl = `${config.apiUrl}${result.gpx_url}`;
+      window.open(gpxUrl, '_blank');
       
       setExportMessage({
         type: 'success',
-        message: 'Fichier KML téléchargé ! Ouvrez-le dans Google Earth Pro.'
+        message: 'Fichier GPX téléchargé !'
       });
       setTimeout(() => setExportMessage(null), 5000);
       
     } catch (err) {
-      console.error('Erreur téléchargement KML:', err);
+      console.error('Erreur téléchargement GPX:', err);
       // Extraire le message d'erreur proprement
       let errorMsg = 'Erreur lors du téléchargement';
       if (typeof err === 'string') {
@@ -78,44 +89,50 @@ export function ClosedRouteActions({ selectedHuts, startDate, onToggle3D = () =>
     }
   };
 
+  // En mode 3D, afficher uniquement le bouton pour fermer la 3D
+  if (is3DMode) {
+    return (
+      <div className="closed-route-actions">
+        <div className="closed-route-actions-grid" style={{ gridTemplateColumns: '1fr' }}>
+          <button
+            className="action-btn action-btn-3d-active"
+            onClick={handleClose3D}
+            title="Revenir à la carte 2D"
+          >
+            <X size={16} className="action-btn-icon" />
+            <span className="action-btn-text">Fermer 3D</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="closed-route-actions">
-      <h4 className="closed-route-actions-title">Actions</h4>
-      
       <div className="closed-route-actions-grid">
-        {/* Bouton principal : Voir en 3D */}
+        {/* Bouton : Voir en 3D */}
         <button
-          className="action-btn action-btn-primary"
+          className="action-btn"
           onClick={handleOpenIn3D}
           title="Voir l'itinéraire en 3D avec le relief"
         >
-          <Globe size={18} className="action-btn-icon" />
-          <span>Voir en 3D</span>
+          <Globe size={16} className="action-btn-icon" />
+          <span className="action-btn-text">3D</span>
         </button>
         
-        {/* Bouton secondaire : Télécharger KML */}
+        {/* Bouton : Télécharger GPX */}
         <button
-          className="action-btn action-btn-secondary"
-          onClick={handleDownloadKml}
+          className="action-btn"
+          onClick={handleDownloadGpx}
           disabled={isExporting}
-          title="Télécharger pour Google Earth Pro"
+          title="Télécharger le fichier GPX"
         >
           {isExporting ? (
             <Loader2 size={16} className="action-btn-icon spinning" />
           ) : (
             <Download size={16} className="action-btn-icon" />
           )}
-          <span>KML</span>
-        </button>
-        
-        {/* Futur : Export GPX */}
-        <button
-          className="action-btn action-btn-secondary action-btn-disabled"
-          disabled
-          title="Bientôt disponible"
-        >
-          <FileText size={16} className="action-btn-icon" />
-          <span>GPX</span>
+          <span className="action-btn-text">GPX</span>
         </button>
       </div>
       
