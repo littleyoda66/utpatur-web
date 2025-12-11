@@ -2,7 +2,7 @@
 /**
  * Wrapper qui permet de basculer entre la carte Leaflet 2D et Cesium 3D
  */
-import React, { Suspense, lazy, useState, useRef, useCallback } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { RouteMap } from './RouteMap';
 
 // Lazy load Cesium pour éviter de charger 3MB au démarrage
@@ -63,39 +63,11 @@ export function MapWrapper({
   profileHoverPosition = null,
   isRouteClosed = false,
   is3DMode = false,
-  onToggle3D = () => {}
+  onToggle3D = () => {},
+  mapBounds = null
 }) {
-  // Stocker les bounds de la carte 2D avant de passer en 3D
-  const savedBoundsRef = useRef(null);
-  const savedZoomRef = useRef(null);
-  
-  // État pour forcer la restauration des bounds
-  const [restoreBounds, setRestoreBounds] = useState(null);
-
-  // Callback appelé par RouteMap pour sauvegarder les bounds
-  const handleMapReady = useCallback((map) => {
-    // Sauvegarder les bounds actuels quand on passe en 3D
-    if (map) {
-      savedBoundsRef.current = map.getBounds();
-      savedZoomRef.current = map.getZoom();
-    }
-  }, []);
-
-  const handleOpen3D = () => {
-    // Les bounds seront sauvegardés via onMapReady
-    onToggle3D(true);
-  };
-
   const handleClose3D = () => {
     onToggle3D(false);
-    // Restaurer les bounds sauvegardés
-    if (savedBoundsRef.current) {
-      setRestoreBounds({
-        bounds: savedBoundsRef.current,
-        zoom: savedZoomRef.current,
-        timestamp: Date.now()
-      });
-    }
   };
 
   // Mode 3D
@@ -105,6 +77,7 @@ export function MapWrapper({
         <CesiumMap 
           selectedHuts={selectedHuts}
           onClose={handleClose3D}
+          mapBounds={mapBounds}
         />
       </Suspense>
     );
@@ -120,8 +93,7 @@ export function MapWrapper({
       onHutClick={onHutClick}
       profileHoverPosition={profileHoverPosition}
       isRouteClosed={isRouteClosed}
-      onMapReady={handleMapReady}
-      restoreBounds={restoreBounds}
+      mapBounds={mapBounds}
     />
   );
 }
