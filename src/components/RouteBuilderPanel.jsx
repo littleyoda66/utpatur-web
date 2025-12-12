@@ -121,12 +121,21 @@ export function RouteBuilderPanel() {
   const [hoveredHutId, setHoveredHutId] = useState(null);
   const [is3DMode, setIs3DMode] = useState(false);
   const [profileHoverPosition, setProfileHoverPosition] = useState(null);
+  const [flightProgress, setFlightProgress] = useState(null); // Distance parcourue en km pendant le survol 3D
+  const [seekToDistance, setSeekToDistance] = useState(null); // Distance cible pour sauter dans le survol
   const [startDate, setStartDate] = useState(() => {
     // Date par défaut : demain
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().split('T')[0];
   });
+
+  // Réinitialiser flightProgress quand on quitte le mode 3D
+  useEffect(() => {
+    if (!is3DMode) {
+      setFlightProgress(null);
+    }
+  }, [is3DMode]);
 
   // Fonction pour formater une date
   const formatDate = (dateStr, dayOffset) => {
@@ -297,6 +306,18 @@ export function RouteBuilderPanel() {
     
     addHut(restDayHut, []);
   };
+
+  // Callback pour recevoir la progression du survol 3D
+  const handleFlightProgressChange = useCallback((distanceKm) => {
+    setFlightProgress(distanceKm);
+  }, []);
+
+  // Callback pour sauter à une position dans le survol (clic sur profil)
+  const handleSeekFlight = useCallback((distanceKm) => {
+    setSeekToDistance(distanceKm);
+    // Reset après un court délai pour permettre de re-cliquer au même endroit
+    setTimeout(() => setSeekToDistance(null), 100);
+  }, []);
 
   const stats = getStats();
   const lastHut = selectedHuts.length > 0 ? selectedHuts[selectedHuts.length - 1] : null;
@@ -747,6 +768,8 @@ export function RouteBuilderPanel() {
             selectedHuts={selectedHuts} 
             onHutHover={setHoveredHutId}
             onPositionHover={setProfileHoverPosition}
+            flightProgress={flightProgress}
+            onSeekFlight={is3DMode ? handleSeekFlight : null}
           />
         )}
         <div className="map-container">
@@ -761,6 +784,8 @@ export function RouteBuilderPanel() {
 			  is3DMode={is3DMode}
 			  onToggle3D={setIs3DMode}
 			  mapBounds={mapBounds}
+			  onFlightProgressChange={handleFlightProgressChange}
+			  seekToDistance={seekToDistance}
 			/>
         </div>
       </div>
