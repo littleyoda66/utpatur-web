@@ -4,7 +4,7 @@
 .route-builder-3col {
   display: flex;
   width: 100%;
-  height: calc(100vh - 65px);
+  flex: 1;
   gap: 12px;
   padding: 12px;
   background: #f1f5f9;
@@ -838,8 +838,8 @@
   align-items: center;
   justify-content: center;
   gap: 0;
-  margin-bottom: 16px;
-  padding: 12px 8px;
+  margin-bottom: 12px;
+  padding: 8px 6px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -850,12 +850,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 4px 8px;
+  padding: 2px 6px;
 }
 
 .expedition-stat-divider {
   width: 1px;
-  height: 32px;
+  height: 24px;
   background: #e2e8f0;
 }
 
@@ -863,7 +863,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   color: #1e293b;
   line-height: 1.2;
@@ -1079,17 +1079,18 @@
 
 .calendar-segment-stats {
   display: flex;
-  gap: 8px;
-  font-size: 10px;
+  gap: 10px;
+  font-size: 12px;
 }
 
 .calendar-segment-distance {
-  font-weight: 600;
-  color: #475569;
+  font-weight: 700;
+  color: #1e293b;
 }
 
 .calendar-segment-elevation {
-  color: #94a3b8;
+  color: #64748b;
+  font-weight: 500;
 }
 
 .calendar-segment-warning {
@@ -1279,18 +1280,4 @@
   font-size: 11px;
   color: #94a3b8;
   margin: 0;
-}
-
-/* ============================================
-   VERSION BADGE
-   ============================================ */
-
-.version-badge {
-  padding: 8px 12px;
-  font-size: 10px;
-  color: #94a3b8;
-  font-family: ui-monospace, monospace;
-  text-align: center;
-  border-top: 1px solid #f1f5f9;
-  margin-top: auto;
 }
