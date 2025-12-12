@@ -27,9 +27,6 @@ export function LoadItinerary() {
     try {
       const data = await itinerariesApi.load(code);
       
-      console.log('DEBUG - Loaded data:', data);
-      console.log('DEBUG - Loaded steps:', data.steps);
-      
       // Restaurer l'itinéraire complet avec les polylines
       restoreItinerary({
         huts: data.huts,

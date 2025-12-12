@@ -694,8 +694,6 @@ export function RouteBuilderPanel() {
                       closeRoute();
                       // Sauvegarder l'itinéraire et obtenir un code
                       try {
-                        console.log('DEBUG - currentRoute:', currentRoute);
-                        console.log('DEBUG - currentRoute.steps:', currentRoute?.steps);
                         const result = await itinerariesApi.save({
                           selectedHuts,
                           currentRoute,
