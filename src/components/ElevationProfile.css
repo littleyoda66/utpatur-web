@@ -317,3 +317,100 @@
   color: #94a3b8;
   text-transform: lowercase;
 }
+
+/* Ajouts à ElevationProfile.css pour le curseur de vol 3D */
+
+/* Indicateur survol en cours dans le header */
+.elevation-profile-flight-indicator {
+  font-size: 11px;
+  color: #ff6b00;
+  background: rgba(255, 107, 0, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  animation: flightPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes flightPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Chart cliquable pendant le survol */
+.elevation-chart-clickable {
+  cursor: pointer;
+}
+
+.elevation-chart-clickable:hover {
+  background: rgba(255, 107, 0, 0.03);
+}
+
+/* Curseur de vol 3D */
+.elevation-flight-cursor {
+  position: absolute;
+  transform: translate(-50%, 50%);
+  pointer-events: none;
+  z-index: 20;
+}
+
+.elevation-flight-cursor-dot {
+  width: 14px;
+  height: 14px;
+  background: #ff6b00;
+  border: 3px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(255, 107, 0, 0.6), 0 2px 4px rgba(0,0,0,0.3);
+  animation: flightDotPulse 1s ease-in-out infinite;
+}
+
+@keyframes flightDotPulse {
+  0%, 100% { 
+    transform: scale(1);
+    box-shadow: 0 0 12px rgba(255, 107, 0, 0.6), 0 2px 4px rgba(0,0,0,0.3);
+  }
+  50% { 
+    transform: scale(1.15);
+    box-shadow: 0 0 20px rgba(255, 107, 0, 0.8), 0 2px 4px rgba(0,0,0,0.3);
+  }
+}
+
+.elevation-flight-cursor-line {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  background: linear-gradient(to bottom, #ff6b00, transparent);
+  pointer-events: none;
+}
+
+.elevation-flight-cursor-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 107, 0, 0.95);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.elevation-flight-cursor-tooltip .flight-cursor-distance {
+  font-size: 9px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+/* Ajuster le header pour le badge */
+.elevation-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}

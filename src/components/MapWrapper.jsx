@@ -64,9 +64,16 @@ export function MapWrapper({
   isRouteClosed = false,
   is3DMode = false,
   onToggle3D = () => {},
-  mapBounds = null
+  mapBounds = null,
+  // Nouvelles props pour synchronisation survol 3D <-> profil élévation
+  onFlightProgressChange = null,
+  seekToDistance = null
 }) {
   const handleClose3D = () => {
+    // Signaler que le vol est terminé
+    if (onFlightProgressChange) {
+      onFlightProgressChange(null);
+    }
     onToggle3D(false);
   };
 
@@ -78,6 +85,8 @@ export function MapWrapper({
           selectedHuts={selectedHuts}
           onClose={handleClose3D}
           mapBounds={mapBounds}
+          onFlightProgressChange={onFlightProgressChange}
+          seekToDistance={seekToDistance}
         />
       </Suspense>
     );
