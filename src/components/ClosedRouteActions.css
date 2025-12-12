@@ -171,3 +171,52 @@
     font-size: 0.6rem;
   }
 }
+
+/* Code d'itinéraire */
+.itinerary-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+}
+
+.itinerary-code-label {
+  font-size: 0.7rem;
+  color: #0369a1;
+  font-weight: 500;
+}
+
+.itinerary-code-value {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Source Code Pro', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0c4a6e;
+  letter-spacing: 0.1em;
+}
+
+.itinerary-code-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  color: #0284c7;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.itinerary-code-copy:hover {
+  background: rgba(2, 132, 199, 0.1);
+  color: #0369a1;
+}
+
+.itinerary-code-copy:active {
+  transform: scale(0.95);
+}

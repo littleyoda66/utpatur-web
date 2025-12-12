@@ -1,6 +1,6 @@
 // src/components/ClosedRouteActions.jsx
 import React, { useState } from 'react';
-import { Globe, Download, Loader2, X } from 'lucide-react';
+import { Globe, Download, Loader2, X, Copy, Check } from 'lucide-react';
 import { exportApi } from '../services/api';
 import { config } from '../config';
 import './ClosedRouteActions.css';
@@ -8,18 +8,19 @@ import './ClosedRouteActions.css';
 /**
  * Zone d'actions disponibles quand l'itinéraire est clos
  * - Vue 3D (Cesium)
- * - Export KML
- * - Export GPX (futur)
+ * - Export GPX
+ * - Code unique de l'itinéraire
  */
 export function ClosedRouteActions({ 
   selectedHuts, 
   startDate, 
   onToggle3D = () => {},
   is3DMode = false,
-  onReopenRoute = null  // Callback pour rouvrir l'itinéraire
+  itineraryCode = null // Code unique de l'itinéraire
 }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   // Générer le nom de l'expédition à partir des cabanes
   const getExpeditionName = () => {
@@ -38,6 +39,19 @@ export function ClosedRouteActions({
   // Fermer la vue 3D
   const handleClose3D = () => {
     onToggle3D(false);
+  };
+
+  // Copier le code dans le presse-papier
+  const handleCopyCode = async () => {
+    if (!itineraryCode) return;
+    
+    try {
+      await navigator.clipboard.writeText(itineraryCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Erreur copie:', err);
+    }
   };
 
   // Télécharger le GPX
@@ -64,14 +78,12 @@ export function ClosedRouteActions({
       
     } catch (err) {
       console.error('Erreur téléchargement GPX:', err);
-      // Extraire le message d'erreur proprement
       let errorMsg = 'Erreur lors du téléchargement';
       if (typeof err === 'string') {
         errorMsg = err;
       } else if (err?.message) {
         errorMsg = typeof err.message === 'string' ? err.message : JSON.stringify(err.message);
       } else if (err?.detail) {
-        // Erreur Pydantic/FastAPI
         if (Array.isArray(err.detail)) {
           errorMsg = err.detail.map(e => e.msg || e.message || String(e)).join(', ');
         } else if (typeof err.detail === 'string') {
@@ -103,6 +115,21 @@ export function ClosedRouteActions({
             <span className="action-btn-text">Fermer 3D</span>
           </button>
         </div>
+        
+        {/* Afficher le code même en mode 3D */}
+        {itineraryCode && (
+          <div className="itinerary-code">
+            <span className="itinerary-code-label">Code :</span>
+            <span className="itinerary-code-value">{itineraryCode}</span>
+            <button 
+              className="itinerary-code-copy"
+              onClick={handleCopyCode}
+              title="Copier le code"
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -135,6 +162,21 @@ export function ClosedRouteActions({
           <span className="action-btn-text">GPX</span>
         </button>
       </div>
+      
+      {/* Code de l'itinéraire */}
+      {itineraryCode && (
+        <div className="itinerary-code">
+          <span className="itinerary-code-label">Code :</span>
+          <span className="itinerary-code-value">{itineraryCode}</span>
+          <button 
+            className="itinerary-code-copy"
+            onClick={handleCopyCode}
+            title="Copier le code"
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </div>
+      )}
       
       {/* Message de succès ou d'erreur */}
       {exportMessage && (

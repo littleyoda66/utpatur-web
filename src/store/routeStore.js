@@ -72,6 +72,7 @@ export const useRouteStore = create(
       maxDistanceKm: 35,
       maxSegments: 2,
       isRouteClosed: false,
+      itineraryCode: null, // Code unique de l'itinéraire sauvegardé
       trailheads: [], // Cache des trailheads avec infos transport
       mapBounds: DEFAULT_BOUNDS, // Bounds pour la carte
       
@@ -197,8 +198,14 @@ export const useRouteStore = create(
         reachableHuts: [],
         error: null,
         isRouteClosed: false,
+        itineraryCode: null,
         mapBounds: DEFAULT_BOUNDS
       }),
+      
+      /**
+       * Définir le code de l'itinéraire
+       */
+      setItineraryCode: (code) => set({ itineraryCode: code }),
       
       /**
        * Clore l'itinéraire
@@ -276,7 +283,88 @@ export const useRouteStore = create(
           segments: currentRoute.steps?.length || 0,
           avgDistance: currentRoute.totalDistance / (selectedHuts.length - 1 || 1)
         };
-      }
+      },
+      
+      /**
+       * Restaurer un itinéraire complet (depuis un code sauvegardé)
+       */
+      restoreItinerary: (data) => set((state) => {
+        const { huts, segments, steps, code, startDate, maxDistance, maxSegments } = data;
+        
+        // Les steps sont dans l'ordre : tous les steps pour atteindre hut[1], puis hut[2], etc.
+        // On doit les regrouper par cabane de destination dans l'ordre de l'itinéraire
+        const allSteps = steps || [];
+        let stepIndex = 0;
+        
+        // Reconstruire selectedHuts avec les infos de segment ET les steps
+        const selectedHuts = huts.map((hut, hutIndex) => {
+          const segment = hutIndex > 0 ? segments[hutIndex - 1] : null;
+          const hutId = String(hut.hut_id);
+          
+          // Pour la première cabane, pas de steps
+          if (hutIndex === 0) {
+            return {
+              ...hut,
+              id: hut.hut_id,
+              hut_id: hut.hut_id,
+              total_distance: 0,
+              elevation_gain: 0,
+              elevation_loss: 0,
+              isRestDay: hut.is_rest_day || false,
+              steps: []
+            };
+          }
+          
+          // Collecter les steps jusqu'à atteindre cette cabane (to_hut_id === hutId)
+          const hutSteps = [];
+          while (stepIndex < allSteps.length) {
+            const step = allSteps[stepIndex];
+            hutSteps.push(step);
+            stepIndex++;
+            
+            // Si ce step mène à cette cabane, on a fini pour cette cabane
+            if (String(step.to_hut_id) === hutId) {
+              break;
+            }
+          }
+          
+          return {
+            ...hut,
+            id: hut.hut_id,
+            hut_id: hut.hut_id,
+            total_distance: segment?.distance_km || 0,
+            elevation_gain: segment?.elevation_gain || 0,
+            elevation_loss: segment?.elevation_loss || 0,
+            isRestDay: hut.is_rest_day || false,
+            steps: hutSteps
+          };
+        });
+        
+        // Reconstruire currentRoute avec les steps (contenant les polylines)
+        const totalDistance = segments.reduce((sum, s) => sum + (s.distance_km || 0), 0);
+        const totalDplus = segments.reduce((sum, s) => sum + (s.elevation_gain || 0), 0);
+        const totalDminus = segments.reduce((sum, s) => sum + (s.elevation_loss || 0), 0);
+        
+        const currentRoute = {
+          huts: selectedHuts,
+          steps: allSteps,
+          totalDistance,
+          totalDplus,
+          totalDminus
+        };
+        
+        return {
+          selectedHuts,
+          currentRoute,
+          reachableHuts: [],
+          isRouteClosed: true,
+          itineraryCode: code,
+          maxDistanceKm: maxDistance || 35,
+          maxSegments: maxSegments || 2,
+          error: null,
+          mapBounds: calculateBounds(selectedHuts, [], true)
+        };
+      })
     }),
     { name: 'RouteStore' }
   )
