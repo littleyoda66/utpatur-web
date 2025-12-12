@@ -1,7 +1,7 @@
 // src/components/RouteBuilderPanel.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouteStore } from '../store/routeStore';
-import { hutsApi } from '../services/api';
+import { hutsApi, itinerariesApi } from '../services/api';
 import { StartPointSelector } from './StartPointSelector';
 import { ReachableHutsList } from './ReachableHutsList';
 import { RouteMap } from './RouteMap';
@@ -10,6 +10,8 @@ import { ElevationProfile } from './ElevationProfile';
 import './RouteBuilderPanel.css';
 import { ClosedRouteActions } from './ClosedRouteActions';
 import './ClosedRouteActions.css';
+import { LoadItinerary } from './LoadItinerary';
+import './LoadItinerary.css';
 import { MapWrapper } from './MapWrapper';
 
 
@@ -86,6 +88,7 @@ function Flag({ countryCode, size = 14 }) {
 export function RouteBuilderPanel() {
   const {
     selectedHuts,
+    currentRoute,
     reachableHuts,
     maxDistanceKm,
     maxSegments,
@@ -94,6 +97,7 @@ export function RouteBuilderPanel() {
     isRouteClosed,
     trailheads,
     mapBounds,
+    itineraryCode,
     setStartHut,
     addHut,
     removeLastHut,
@@ -108,7 +112,8 @@ export function RouteBuilderPanel() {
     clearError,
     getStats,
     setTrailheads,
-    getTransportInfo
+    getTransportInfo,
+    setItineraryCode
   } = useRouteStore();
 
   const [allHuts, setAllHuts] = useState([]);
@@ -334,6 +339,11 @@ export function RouteBuilderPanel() {
         </div>
 
         <div className="column-content">
+          {/* Charger un itinéraire sauvegardé */}
+          {selectedHuts.length === 0 && (
+            <LoadItinerary />
+          )}
+          
           {/* Cabane de départ - cachée une fois sélectionnée */}
           {selectedHuts.length === 0 && (
 		  <StartPointSelector
@@ -457,6 +467,7 @@ export function RouteBuilderPanel() {
 				  startDate={startDate}
 				  onToggle3D={setIs3DMode}
 				  is3DMode={is3DMode}
+				  itineraryCode={itineraryCode}
 				/>
 			  </div>
 			)}
@@ -675,7 +686,28 @@ export function RouteBuilderPanel() {
               {selectedHuts.length > 1 && (
                 <button
                   className={`btn btn-sm w-full mt-3 ${isRouteClosed ? 'btn-outline btn-secondary' : 'btn-primary'}`}
-                  onClick={() => isRouteClosed ? reopenRoute() : closeRoute()}
+                  onClick={async () => {
+                    if (isRouteClosed) {
+                      reopenRoute();
+                      setItineraryCode(null);
+                    } else {
+                      closeRoute();
+                      // Sauvegarder l'itinéraire et obtenir un code
+                      try {
+                        const result = await itinerariesApi.save({
+                          selectedHuts,
+                          currentRoute,
+                          startDate,
+                          maxDistance: maxDistanceKm,
+                          maxSegments
+                        });
+                        setItineraryCode(result.code);
+                      } catch (err) {
+                        console.error('Erreur sauvegarde itinéraire:', err);
+                        // On clôt quand même, juste pas de code
+                      }
+                    }
+                  }}
                   disabled={isRouteClosed && is3DMode}
                   title={isRouteClosed && is3DMode ? "Fermez d'abord la vue 3D" : undefined}
                 >

@@ -229,3 +229,76 @@ export const exportApi = {
     return data;
   }
 };
+
+// ===== ITINERARIES API =====
+
+export const itinerariesApi = {
+  /**
+   * Sauvegarde un itinéraire et retourne un code unique
+   * @param {Object} routeData - Données de l'itinéraire
+   * @returns {Object} { code, created_at, huts_count, total_distance }
+   */
+  async save(routeData) {
+    const { selectedHuts, currentRoute, startDate, maxDistance, maxSegments, expeditionName } = routeData;
+    
+    // Transformer les données pour l'API
+    const huts = selectedHuts.map(hut => ({
+      hut_id: String(hut.hut_id || hut.id),
+      name: hut.name,
+      latitude: hut.latitude,
+      longitude: hut.longitude,
+      country_code: hut.country_code || null,
+      altitude: hut.altitude || null,
+      is_rest_day: hut.isRestDay || false
+    }));
+    
+    // Construire les segments
+    const segments = selectedHuts.slice(1).map(hut => ({
+      distance_km: hut.total_distance || 0,
+      elevation_gain: hut.elevation_gain || 0,
+      elevation_loss: hut.elevation_loss || 0
+    }));
+    
+    // Construire les steps avec les polylines
+    const steps = currentRoute?.steps?.map(step => ({
+      from_hut_id: step.from_hut_id ? String(step.from_hut_id) : null,
+      to_hut_id: step.to_hut_id ? String(step.to_hut_id) : null,
+      distance_km: step.distance_km || 0,
+      dplus_m: step.dplus_m || 0,
+      dminus_m: step.dminus_m || 0,
+      geometry_polyline: step.geometry_polyline || null
+    })) || [];
+    
+    const { data } = await apiClient.post('/itineraries', {
+      huts,
+      segments,
+      steps,
+      start_date: startDate,
+      max_distance: maxDistance,
+      max_segments: maxSegments,
+      expedition_name: expeditionName
+    });
+    
+    return data;
+  },
+
+  /**
+   * Charge un itinéraire à partir de son code
+   * @param {string} code - Code unique de l'itinéraire (6 caractères)
+   * @returns {Object} Données complètes de l'itinéraire
+   */
+  async load(code) {
+    const { data } = await apiClient.get(`/itineraries/${code.toUpperCase()}`);
+    return data;
+  },
+
+  /**
+   * Vérifie si un itinéraire existe
+   * @param {string} code - Code unique de l'itinéraire
+   * @returns {Object} { exists: boolean, created_at?, huts_count? }
+   */
+  async exists(code) {
+    const { data } = await apiClient.get(`/itineraries/${code.toUpperCase()}/exists`);
+    return data;
+  }
+};
