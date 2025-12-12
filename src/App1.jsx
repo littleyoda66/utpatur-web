@@ -96,11 +96,6 @@ export default function App() {
             <MountainsSilhouette />
           </div>
           
-          {/* Skieur au pied des montagnes */}
-          <div className="header-skier">
-            <img src="/skier.png" alt="" />
-          </div>
-          
           <div className="header-content">
             {/* Drapeau Sami à gauche avec dégradé */}
             <div className="header-flag-container">
