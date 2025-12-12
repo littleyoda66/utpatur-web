@@ -10,7 +10,14 @@
   --color-error: #ef4444;
   --color-info: #3b82f6;
   
-  --color-bg: #ffffff;
+  /* Couleurs Sami */
+  --sami-red: #CE2029;
+  --sami-blue: #0047AB;
+  --sami-green: #006B3E;
+  --sami-yellow: #FCCD06;
+  
+  --color-bg: #FDFCFB;
+  --color-bg-pure: #ffffff;
   --color-bg-secondary: #f8fafc;
   --color-border: #e2e8f0;
   --color-text: #1e293b;
@@ -42,117 +49,181 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: var(--color-text);
-  background-color: var(--color-bg-secondary);
+  background-color: var(--color-bg);
   line-height: 1.6;
 }
 
 /* App container */
 .app {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-/* Header */
+/* ============================================
+   HEADER - Design nordique avec drapeau Sami
+   ============================================ */
 .app-header {
-  background: var(--color-bg);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--color-bg-pure);
   border-bottom: 1px solid var(--color-border);
-  padding: var(--spacing-md) var(--spacing-xl);
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  height: 80px;
 }
 
 .header-content {
-  max-width: 1400px;
-  margin: 0 auto;
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-lg);
-  flex-wrap: wrap;
+  padding: 0 var(--spacing-xl) 0 0;
 }
 
-.header-left {
+/* Conteneur du drapeau avec dégradé */
+.header-flag-container {
+  position: relative;
+  height: 100%;
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  z-index: 1;
+}
+
+/* Dégradé bleu diagonal (haut-gauche vers bas-droite) - très progressif */
+.header-flag-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: 900px;
+  height: 100%;
+  background: linear-gradient(135deg, 
+    #0035ad 0%, 
+    #0035ad 25%,
+    rgba(0, 53, 173, 0.6) 42%,
+    rgba(0, 53, 173, 0.3) 58%,
+    rgba(0, 53, 173, 0.12) 72%,
+    rgba(0, 53, 173, 0.04) 85%,
+    transparent 100%
+  );
+  z-index: -1;
+}
+
+/* Drapeau Sami - proportions originales */
+.sami-flag {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+
+.sami-flag svg {
+  height: 100%;
+  width: auto;
+  display: block;
+}
+
+/* Montagnes en arrière-plan */
+.header-mountains {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.header-mountains svg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+}
+
+/* Zone titre - sur le bleu solide après le drapeau */
+.header-brand {
+  position: absolute;
+  left: 140px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .app-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--color-text);
-  margin: 0;
-}
-
-.badges {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.75rem;
+  font-size: 1.6rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-radius: 999px;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.02em;
 }
 
-.badge-warning {
-  background: #fef3c7;
-  color: #92400e;
+.app-subtitle {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.02em;
+  margin-top: -2px;
 }
 
-.badge-info {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.badge-success {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.badge-error {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-/* Tabs */
-.tabs {
+/* Navigation links discrets */
+.nav-links {
+  position: relative;
+  z-index: 2;
   display: flex;
-  gap: var(--spacing-sm);
+  gap: 1.5rem;
 }
 
-.tab {
-  padding: 0.5rem 1.25rem;
-  font-size: 0.875rem;
+.nav-link {
+  font-size: 0.85rem;
   font-weight: 500;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-bg);
-  color: var(--color-text);
+  border: none;
+  background: transparent;
+  color: var(--color-text-light);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  padding: 0.25rem 0;
+  position: relative;
 }
 
-.tab:hover {
-  background: var(--color-bg-secondary);
+.nav-link:hover {
+  color: var(--color-text);
 }
 
-.tab-active {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
+.nav-link-active {
+  color: var(--sami-blue);
+  font-weight: 600;
 }
 
-/* Main content - FULL WIDTH */
+.nav-link-active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--sami-blue);
+  border-radius: 1px;
+}
+
+/* ============================================
+   MAIN CONTENT
+   ============================================ */
 .app-main {
   flex: 1;
   width: 100%;
   padding: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Loading states */
@@ -170,7 +241,7 @@ body {
   width: 40px;
   height: 40px;
   border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
+  border-top-color: var(--sami-blue);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -189,7 +260,9 @@ body {
   color: var(--color-text-light);
 }
 
-/* Buttons */
+/* ============================================
+   BUTTONS
+   ============================================ */
 .btn {
   padding: 0.625rem 1.25rem;
   font-size: 0.875rem;
@@ -209,12 +282,12 @@ body {
 }
 
 .btn-primary {
-  background: var(--color-primary);
+  background: var(--sami-blue);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-dark);
+  background: #003d91;
 }
 
 .btn-secondary {
@@ -246,9 +319,11 @@ body {
   font-size: 1rem;
 }
 
-/* Cards */
+/* ============================================
+   CARDS
+   ============================================ */
 .card {
-  background: var(--color-bg);
+  background: var(--color-bg-pure);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: var(--spacing-lg);
@@ -267,7 +342,9 @@ body {
   margin: 0;
 }
 
-/* Forms */
+/* ============================================
+   FORMS
+   ============================================ */
 .form-group {
   margin-bottom: var(--spacing-md);
 }
@@ -287,7 +364,7 @@ body {
   font-size: 0.875rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  background: var(--color-bg);
+  background: var(--color-bg-pure);
   color: var(--color-text);
   transition: border-color 0.2s;
 }
@@ -295,56 +372,129 @@ body {
 .form-input:focus,
 .form-select:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: var(--sami-blue);
+  box-shadow: 0 0 0 3px rgba(0, 71, 171, 0.1);
 }
 
 .form-input::placeholder {
   color: var(--color-text-light);
 }
 
-/* Footer */
+/* ============================================
+   FOOTER
+   ============================================ */
 .app-footer {
-  background: var(--color-bg);
+  background: var(--color-bg-pure);
   border-top: 1px solid var(--color-border);
-  padding: var(--spacing-md);
-  text-align: center;
-  font-size: 0.875rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-lg);
+  font-size: 0.8rem;
   color: var(--color-text-light);
+}
+
+.footer-version {
+  font-weight: 500;
+}
+
+.footer-badges {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 999px;
+}
+
+.badge-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badge-error {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .debug-info {
   font-family: 'Courier New', monospace;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   opacity: 0.7;
 }
 
-/* Responsive */
+/* ============================================
+   RESPONSIVE
+   ============================================ */
 @media (max-width: 768px) {
   .app-header {
-    padding: var(--spacing-md);
+    height: auto;
+    min-height: 60px;
   }
   
   .header-content {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
   }
   
-  .tabs {
+  .header-flag-container {
+    height: 50px;
+  }
+  
+  .header-flag-container::after {
+    width: 200px;
+  }
+  
+  .header-brand {
+    left: 80px;
+  }
+  
+  .app-title {
+    font-size: 1.2rem;
+  }
+  
+  .app-subtitle {
+    font-size: 0.6rem;
+  }
+  
+  .nav-links {
     width: 100%;
+    justify-content: center;
+    margin-top: var(--spacing-xs);
+    gap: 1rem;
   }
   
-  .tab {
-    flex: 1;
-    text-align: center;
+  .header-mountains svg {
+    height: 40px;
   }
   
-  .app-main {
-    padding: var(--spacing-md);
+  .app-footer {
+    flex-direction: column;
+    gap: var(--spacing-sm);
   }
 }
 
-/* Utilities */
+/* ============================================
+   UTILITIES
+   ============================================ */
 .text-center { text-align: center; }
 .text-right { text-align: right; }
 .text-muted { color: var(--color-text-light); }

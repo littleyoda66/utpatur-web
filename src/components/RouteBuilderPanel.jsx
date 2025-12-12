@@ -7,7 +7,6 @@ import { ReachableHutsList } from './ReachableHutsList';
 import { RouteMap } from './RouteMap';
 import { Trash2, Bed, Compass, TrendingUp, TrendingDown, Train, Bus, Ship, Lock, Unlock } from 'lucide-react';
 import { ElevationProfile } from './ElevationProfile';
-import { version } from '../../package.json';
 import './RouteBuilderPanel.css';
 import { ClosedRouteActions } from './ClosedRouteActions';
 import './ClosedRouteActions.css';
@@ -256,6 +255,9 @@ export function RouteBuilderPanel() {
   };
 
   const handleRemoveDay = (index) => {
+    // Sortir de la vue 3D si active
+    if (is3DMode) setIs3DMode(false);
+    
     if (index === 0) {
       resetRoute();
     } else {
@@ -458,21 +460,7 @@ export function RouteBuilderPanel() {
 				/>
 			  </div>
 			)}
-
-          {/* Message si pas de cabane */}
-          {selectedHuts.length === 0 && (
-            <div className="section-card empty-state">
-              <div className="empty-state-icon">🏔️</div>
-              <h3 className="empty-state-title">Aucune cabane sélectionnée</h3>
-              <p className="text-muted text-sm">
-                Sélectionnez une cabane de départ pour voir les options disponibles
-              </p>
-            </div>
-          )}
         </div>
-
-        {/* Badge version */}
-        <div className="version-badge">v{version}</div>
       </div>
 
       {/* COLONNE CENTRALE */}
@@ -682,13 +670,6 @@ export function RouteBuilderPanel() {
                   return null;
                 })()}
               </div>
-
-              {/* Date de fin */}
-              {selectedHuts.length > 1 && (
-                <div className="expedition-footer">
-                  Arrivée le {formatDateFull(formatDate(startDate, selectedHuts.length - 1))}
-                </div>
-              )}
 
               {/* Bouton clore/rouvrir l'itinéraire */}
               {selectedHuts.length > 1 && (
